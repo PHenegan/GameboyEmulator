@@ -27,25 +27,23 @@ impl CPU {
     }
 
     pub fn get_joined_registers(&self, idx1: usize, idx2: usize) -> Option<u16> {
-        // convert the two Option enums into a single option with a tuple,
+        let reg1 = self.registers.get(idx1)?;
+        let reg2 = self.registers.get(idx2)?;
+        
         // join the two integers using bitshifting
-        self.registers.get(idx1)
-            .zip(self.registers.get(idx2))
-            .map(|(val1, val2)| {
-                ((*val1 as u16) << 8) + *val2 as u16
-            })
+        Some(((*reg1 as u16) << 8) + *reg2 as u16)
     }
 
     pub fn set_joined_registers(
         &mut self, idx1: usize, idx2: usize, data: u16
     ) -> Result<(), RegisterIndexError> {
 
-        // Register 1 gets the 8 most significant bits (done by shifting, then casting)
+        // Register 1 gets the 8 most significant bits
         let reg1: &mut u8 = self.registers.get_mut(idx1)
             .ok_or(RegisterIndexError)?;
         *reg1 = (data >> 8) as u8;
         
-        // Register 2 gets the 8 least significant bits (done by simply casting)
+        // Register 2 gets the 8 least significant bits
         let reg2: &mut u8 = self.registers.get_mut(idx2)
             .ok_or(RegisterIndexError)?;
         *reg2 = data as u8;
