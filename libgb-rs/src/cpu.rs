@@ -1,3 +1,5 @@
+use crate::utils::{Merge, Split};
+
 #[derive(Clone, Copy)]
 pub enum CpuRegister {
     A = 0,
@@ -38,21 +40,21 @@ impl CpuData {
     }
 
     pub fn get_joined_registers(&self, idx1: &CpuRegister, idx2: &CpuRegister) -> u16 {
-        let reg1 = self.get_register(idx1);
-        let reg2 = self.get_register(idx2);
-        
-        // join the two integers using bitshifting
-        ((*reg1 as u16) << 8) + *reg2 as u16
+        let left = self.get_register(idx1);
+        let right = self.get_register(idx2);
+        left.merge(*right)
     }
 
     pub fn set_joined_registers(&mut self, idx1: &CpuRegister, idx2: &CpuRegister, data: u16) {
+        let (left_data, right_data) = data.split();
+
         // Register 1 gets the 8 most significant bits
         let reg1: &mut u8 = self.get_register_mut(idx1);
-        *reg1 = (data >> 8) as u8;
-        
+        *reg1 = left_data; 
+
         // Register 2 gets the 8 least significant bits
         let reg2: &mut u8 = self.get_register_mut(idx2);
-        *reg2 = data as u8;
+        *reg2 = right_data;
     }
 }
 
