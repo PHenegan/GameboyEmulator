@@ -1,17 +1,17 @@
 pub struct RegisterIndexError;
 
 /// The CPU of a Gameboy/Gameboy Color system
-pub struct CPU {
+pub struct CpuData {
     // 7 8-bit registers A-L, followed by the last flag register F 
     registers: Vec<u8>, 
     pub sp: u16,
     pub pc: u16
 }
 
-impl CPU {
+impl CpuData {
 
-    pub fn new() -> CPU {
-        return CPU {
+    pub fn new() -> CpuData {
+        return CpuData {
             registers: vec![0, 0, 0, 0, 0, 0, 0, 0],
             sp: 0,
             pc: 0
