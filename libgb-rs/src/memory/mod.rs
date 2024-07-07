@@ -9,27 +9,33 @@ pub trait MemoryController {
     fn store_half_word(&mut self, address: u16, data: u16) -> Result<(), MemoryWriteError>;
 }
 
-
 // Some memory map constants
 const DMG_ROM_END: u16 = 0x7FFF;
 const DMG_VRAM_START: u16 = 0x8000;
 const DMG_VRAM_END: u16 = 0x9FFF;
+const DMG_EXT_START: u16 = 0xA000;
+const DMG_EXT_END: u16 = 0xBFFF;
 const DMG_RAM_START: u16 = 0xC000;
 const DMG_RAM_END: u16 = 0xDFFF;
+const DMG_RES_START: u16 = 0xFE00;
+const DMG_RES_END: u16 = 0xFFFF;
 
 const DMG_RAM_SIZE: usize = 8192;
 const DMG_VRAM_SIZE: usize = 8192;
+const DMG_RES_SIZE: usize = (DMG_RES_END - DMG_RES_START + 1) as usize;
 
 pub struct DmgMemoryController {
     ram: [u8; DMG_RAM_SIZE],
-    vram: [u8; DMG_VRAM_SIZE]
+    vram: [u8; DMG_VRAM_SIZE],
+    system: [u8; DMG_RES_SIZE]
 }
 
 impl DmgMemoryController {
     pub fn new() -> DmgMemoryController {
         DmgMemoryController {
             ram: [0; DMG_VRAM_SIZE],
-            vram: [0; DMG_VRAM_SIZE]
+            vram: [0; DMG_VRAM_SIZE],
+            system: [0; DMG_RES_SIZE]
         }
     }
     fn get_byte(&self, address: u16) -> Option<&u8> {
@@ -38,12 +44,19 @@ impl DmgMemoryController {
                 // handle fetching memory from ROM here
                 todo!()
             },
+            DMG_EXT_START ..= DMG_EXT_END => {
+                // handle external cartridge memory here
+                todo!()
+            },
             DMG_VRAM_START ..= DMG_VRAM_END => {
                 Some(&self.vram[(address - DMG_VRAM_START) as usize])
             },
             DMG_RAM_START ..= DMG_RAM_END => {
                 Some(&self.ram[(address - DMG_RAM_START) as usize])
             },
+            DMG_RES_START ..= DMG_RES_END => {
+                Some(&self.system[(address - DMG_RES_START) as usize])
+            }
             _ => None
         }
     }
@@ -57,9 +70,16 @@ impl DmgMemoryController {
             DMG_VRAM_START ..= DMG_VRAM_END => {
                 Some(&mut self.vram[(address - DMG_VRAM_START) as usize])
             },
+            DMG_EXT_START ..= DMG_EXT_END => {
+                // handle external cartridge memory here
+                todo!()
+            },
             DMG_RAM_START ..= DMG_RAM_END => {
                 Some(&mut self.ram[(address - DMG_RAM_START) as usize])
             },
+            DMG_RES_START ..= DMG_RES_END => {
+                Some(&mut self.system[(address - DMG_RES_START) as usize])
+            }
             _ => None
         }
     }
