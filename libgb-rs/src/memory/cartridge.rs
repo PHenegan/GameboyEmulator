@@ -1,6 +1,5 @@
 use std::usize;
 
-
 pub trait CartridgeMemoryBankController {
     // TODO - think about timer, SRAM, etc. support
     fn get_rom_byte<'a>(&'a self, address: u16) -> Option<&'a u8>;
