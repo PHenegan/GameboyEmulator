@@ -1,4 +1,8 @@
+use cartridge::CartridgeMemoryBankController;
+
 use crate::utils::{Merge, Split};
+
+mod cartridge;
 
 pub struct MemoryWriteError;
 
@@ -25,14 +29,16 @@ const DMG_VRAM_SIZE: usize = 8192;
 const DMG_RES_SIZE: usize = (DMG_RES_END - DMG_RES_START + 1) as usize;
 
 pub struct DmgMemoryController {
+    cartridge: Box<dyn CartridgeMemoryBankController>,
     ram: [u8; DMG_RAM_SIZE],
     vram: [u8; DMG_VRAM_SIZE],
     system: [u8; DMG_RES_SIZE]
 }
 
 impl DmgMemoryController {
-    pub fn new() -> DmgMemoryController {
+    pub fn new(cartridge: Box<dyn CartridgeMemoryBankController>) -> DmgMemoryController {
         DmgMemoryController {
+            cartridge,
             ram: [0; DMG_VRAM_SIZE],
             vram: [0; DMG_VRAM_SIZE],
             system: [0; DMG_RES_SIZE]
@@ -41,12 +47,10 @@ impl DmgMemoryController {
     fn get_byte(&self, address: u16) -> Option<&u8> {
         match address {
             0 ..= DMG_ROM_END => {
-                // handle fetching memory from ROM here
-                todo!()
+                self.cartridge.get_rom_byte(address)
             },
             DMG_EXT_START ..= DMG_EXT_END => {
-                // handle external cartridge memory here
-                todo!()
+                self.cartridge.get_mem_byte(address)
             },
             DMG_VRAM_START ..= DMG_VRAM_END => {
                 Some(&self.vram[(address - DMG_VRAM_START) as usize])
@@ -64,15 +68,13 @@ impl DmgMemoryController {
     fn get_byte_mut<'a>(&'a mut self, address: u16) -> Option<&'a mut u8> {
         match address {
             0 ..= DMG_ROM_END => {
-                // handle fetching memory from ROM here
-                todo!()
+                None
             },
             DMG_VRAM_START ..= DMG_VRAM_END => {
                 Some(&mut self.vram[(address - DMG_VRAM_START) as usize])
             },
             DMG_EXT_START ..= DMG_EXT_END => {
-                // handle external cartridge memory here
-                todo!()
+                self.cartridge.get_mem_byte_mut(address)
             },
             DMG_RAM_START ..= DMG_RAM_END => {
                 Some(&mut self.ram[(address - DMG_RAM_START) as usize])
