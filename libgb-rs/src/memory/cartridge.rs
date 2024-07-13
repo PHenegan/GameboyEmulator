@@ -1,49 +1,40 @@
-use std::usize;
+use mockall::automock;
+use crate::memory::MemoryWriteError;
 
+pub mod basicrom;
+
+#[automock]
 pub trait CartridgeMemoryBankController {
     // TODO - think about timer, SRAM, etc. support
-    fn get_rom_byte<'a>(&'a self, address: u16) -> Option<&'a u8>;
-    fn get_mem_byte<'a>(&'a self, address: u16) -> Option<&'a u8>;
-    fn get_mem_byte_mut<'a>(&'a mut self, address: u16) -> Option<&'a mut u8>;
-}
 
-const ROM_SIZE: usize = 32768;
-const RAM_SIZE: usize = 8192;
-pub struct RomOnlyCartridge {
-    // Question - Does having a battery mean that the RAM is persistant?
-    // (i.e. the battery is what allows for a save file?)
-    rom: [u8; ROM_SIZE],
-    ram: [u8; RAM_SIZE],
-    ram_enabled: bool
-}
+    /// Get the 8-bit number at the given address on the cartridge ROM
+    ///
+    /// Parameters:
+    /// - `address`: the ROM address to read from, indexed between 0 and 32,767
+    fn read_rom(&self, address: u16) -> Option<u8>;
 
-impl RomOnlyCartridge {
-    pub fn new(
-        rom: [u8; ROM_SIZE], ram: Option<[u8; RAM_SIZE]>, _has_battery: bool
-        ) -> RomOnlyCartridge {
-        let ram_enabled = ram.is_some();
-        RomOnlyCartridge { rom, ram: ram.unwrap_or([0; RAM_SIZE]), ram_enabled }
-    }
-}
+    /// Sends a write command to an address in the ROM of a cartridge
+    ///
+    /// NOTE - This should never actually modify the contents of the ROM. Certain Memory Bank
+    /// Controllers use writes to a ROM address to switch between memory banks, allowing for more
+    /// than 32 KiB of RAM and more than 8 KiB of ROM.
+    ///
+    /// Parameters:
+    /// - `address`: the ROM address to write to, indexed between 0 and 32,767
+    /// - `data`: the value to store in RAM
+    fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError>;
 
-impl CartridgeMemoryBankController for RomOnlyCartridge {
-    fn get_rom_byte<'a>(&'a self, address: u16) -> Option<&'a u8> {
-        let address = address as usize;
-        self.rom.get(address)
-    }
+    /// Get the 8-bit number at the given address on the cartridge RAM
+    ///
+    /// Parameters:
+    /// - `address`: the RAM address to read from, indexed between 0 and 8,191
+    fn read_mem(&self, address: u16) -> Option<u8>;
 
-    fn get_mem_byte<'a>(&'a self, address: u16) -> Option<&'a u8> {
-        if !self.ram_enabled {
-            return None
-        }
-        self.ram.get(address as usize).to_owned()
-    }
-
-    fn get_mem_byte_mut<'a>(&'a mut self, address: u16) -> Option<&'a mut u8> {
-        if !self.ram_enabled {
-            return None
-        }
-        let address = address as usize;
-        self.ram.get_mut(address)
-    }
+    /// Write the given byte into this cartridge's RAM at the given location,
+    /// returning the value that was overwritten
+    ///
+    /// Parameters:
+    /// - `address`: the RAM address to get for writing, between 0 and 8,191
+    /// - `data`: the value to store in RAM
+    fn write_mem(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
 }
