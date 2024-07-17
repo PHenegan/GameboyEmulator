@@ -52,4 +52,5 @@ WIP
 the Game Boy system as a whole. I'll also include some typed notes I took on this video
 for the purpose of internalizing the system better.
 
-
+[https://gbdev.io/gb-opcodes//optables/](https://gbdev.io/gb-opcodes//optables/) is a great website
+which has some documentation on the Gameboy's opcodes
