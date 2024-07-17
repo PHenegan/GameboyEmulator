@@ -7,10 +7,40 @@ pub mod cartridge;
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct MemoryWriteError;
 
+/// A Trait representing the functionality needed for interacting with a Game Boy system's
+/// memory
 pub trait MemoryController {
+    /// Retrieve a byte from the given address in memory
+    ///
+    /// `address`: the location in memory to retrieve a byte from.
+    ///
+    /// Returns the byte of memory, or `None` if the address does not exist
     fn load_byte(&self, address: u16) -> Option<u8>;
+
+    /// Load a 16-bit number from the given address in memory
+    ///
+    /// `address`: the location in memory to retrieve two successive bytes from.
+    ///
+    /// Returns the 16-bit number retrieved from memory, or `None` if either byte of the number
+    /// is located at an invalid address.
     fn load_half_word(&self, address: u16) -> Option<u16>;
+
+    /// Save a byte into the given location in memory
+    ///
+    /// `address`: the location in memory to save to
+    /// `data`: the 8-bit number being saved into memory
+    ///
+    /// Returns the byte which was previously in that location of memory, or a MemoryWriteError
+    /// if the address is invalid.
     fn store_byte(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
+
+    /// Save a 16-bit number into the given location in memory
+    ///
+    /// `address`: the location in memory to save to
+    /// `data`: the 16-bit number being saved into memory
+    ///
+    /// If either byte in the 16-bit number occurs at an invalid location in memory,
+    /// a MemoryWriteError with be returned.
     fn store_half_word(&mut self, address: u16, data: u16) -> Result<(), MemoryWriteError>;
 }
 
@@ -29,6 +59,7 @@ const DMG_RAM_SIZE: usize = 8192;
 const DMG_VRAM_SIZE: usize = 8192;
 const DMG_RES_SIZE: usize = (DMG_RES_END - DMG_RES_START + 1) as usize;
 
+/// A Struct Storing the memory of an original Game Boy (DMG) system
 pub struct DmgMemoryController {
     cartridge: Box<dyn CartridgeMemoryBankController>,
     ram: [u8; DMG_RAM_SIZE],
