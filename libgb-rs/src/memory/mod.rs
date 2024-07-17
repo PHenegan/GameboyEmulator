@@ -1,4 +1,5 @@
 use cartridge::CartridgeMemoryBankController;
+use mockall::automock;
 
 use crate::utils::{Merge, Split};
 
@@ -9,6 +10,7 @@ pub struct MemoryWriteError;
 
 /// A Trait representing the functionality needed for interacting with a Game Boy system's
 /// memory
+#[automock]
 pub trait MemoryController {
     /// Retrieve a byte from the given address in memory
     ///
