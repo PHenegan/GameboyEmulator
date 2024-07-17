@@ -2,7 +2,9 @@ use mockall::automock;
 use crate::memory::MemoryWriteError;
 
 mod basicrom;
+mod mbc1;
 pub use basicrom::RomOnlyCartridge;
+pub use mc1::MBC1;
 
 #[automock]
 pub trait CartridgeMemoryBankController {
