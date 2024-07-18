@@ -31,14 +31,14 @@ pub struct MBC1 {
 
 impl MBC1 {
 
-    // TODO - figure out how I want to take in the fields and convert them into banks 
+    // TODO - figure out how I want to take in the fields and convert them into banks
     pub fn new() -> MBC1 {
         MBC1 {
             rom: vec!(),
             ram: vec!(),
             storage_mode: StorageMode::ROM,
             rom_bank: 1,
-            ram_bank: 1,
+            ram_bank: 0,
             has_battery: false,
         }
     }
@@ -46,8 +46,9 @@ impl MBC1 {
     /// Set the lower 5 bits of the rom bank value
     fn set_lower_rom_bank(&mut self, data: u8) {
         self.rom_bank = (self.rom_bank & 0xE0) & (data & 0x1F);
-        // hardware bug present in MBC1 cartridges
-        if self.rom_bank % 10 == 0 {
+        // hardware bug present in MBC1 cartridges, because the 0-comparison
+        // only looks at the first 5 bits
+        if self.rom_bank & 0x1F == 0 {
             self.rom_bank += 1;
         }
    }
@@ -64,7 +65,16 @@ impl MBC1 {
 
 impl CartridgeMemoryBankController for MBC1 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        todo!()
+        if address < ROM_BANK_SIZE as u16 {
+            // ignore the first 5 bits of the bank for 0x0000->0x3FFF
+            // This is the same bug as with setting the rom bank, see set_lower_rom_bank
+            return self.rom.get((self.rom_bank & 0xE0) as usize)?
+                .get(address as usize)
+                .copied()
+        }
+        self.rom.get(self.rom_bank as usize)?
+            .get(address as usize)
+            .copied()
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(),MemoryWriteError> {
@@ -89,13 +99,17 @@ impl CartridgeMemoryBankController for MBC1 {
     }
 
     fn read_mem(&self, address: u16) -> Option<u8> {
-        if address as usize > RAM_BANK_SIZE {
-            todo!()
-        }
-        todo!()
+        self.ram.get(self.ram_bank as usize)?
+            .get(address as usize).copied()
     }
 
     fn write_mem(&mut self, address: u16, data: u8) -> Result<u8,MemoryWriteError> {
-        todo!()
+        let byte = self.ram.get_mut(self.ram_bank as usize)
+            .ok_or(MemoryWriteError)?
+            .get_mut(address as usize)
+            .ok_or(MemoryWriteError)?;
+        let original = byte.clone();
+        *byte = data;
+        Ok(original)
     }
 }
