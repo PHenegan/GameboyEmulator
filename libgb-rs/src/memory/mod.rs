@@ -154,7 +154,7 @@ impl MemoryController for DmgMemoryController {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use mockall::predicate::eq;
     use crate::memory::cartridge::MockCartridgeMemoryBankController;
     use super::*;
