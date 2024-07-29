@@ -6,6 +6,12 @@ mod mbc1;
 pub use basicrom::RomOnlyCartridge;
 pub use mbc1::MBC1;
 
+const ROM_BANK_SIZE: usize = 16384;
+const RAM_BANK_SIZE: usize = 8192;
+
+pub type RomBank = [u8; ROM_BANK_SIZE];
+pub type MemBank = [u8; RAM_BANK_SIZE];
+
 #[automock]
 pub trait CartridgeMemoryBankController {
     // TODO - think about timer, SRAM, etc. support
