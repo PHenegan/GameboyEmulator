@@ -12,8 +12,12 @@ const RAM_BANK_SIZE: usize = 8192;
 pub type RomBank = [u8; ROM_BANK_SIZE];
 pub type MemBank = [u8; RAM_BANK_SIZE];
 
+/// # CartridgeMapper
+/// A Trait representing A Game boy system's cartridge memory mapper. This trait is necessary
+/// to accomodate the different types of Game boy cartridges which allow for increased memory
+/// and ROM storage in several slightly different ways.
 #[automock]
-pub trait CartridgeMemoryBankController {
+pub trait CartridgeMapper {
     // TODO - think about timer, SRAM, etc. support
 
     /// Get the 8-bit number at the given address on the cartridge ROM

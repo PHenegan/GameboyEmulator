@@ -1,4 +1,4 @@
-use crate::memory::cartridge::CartridgeMemoryBankController;
+use crate::memory::cartridge::CartridgeMapper;
 use crate::memory::MemoryWriteError;
 
 const ROM_SIZE: usize = 32768;
@@ -19,7 +19,7 @@ impl RomOnlyCartridge {
     }
 }
 
-impl CartridgeMemoryBankController for RomOnlyCartridge {
+impl CartridgeMapper for RomOnlyCartridge {
     fn read_rom(&self, address: u16) -> Option<u8> {
         let address = address as usize;
         self.rom.get(address).copied()

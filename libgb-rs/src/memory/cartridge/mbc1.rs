@@ -24,7 +24,7 @@ impl From<u8> for StorageMode {
 }
 
 
-use super::{CartridgeMemoryBankController, MemBank, RomBank, ROM_BANK_SIZE};
+use super::{CartridgeMapper, MemBank, RomBank, ROM_BANK_SIZE};
 
 /// # MBC1
 /// A struct which recreates the MBC1 (Memory Bank Controller 1) cartridge functionality
@@ -81,7 +81,7 @@ impl MBC1 {
 // TODO - worth noting that the logic for accessing ROM might still be off, I don't know if there
 // is a reliable knowing how the hardware on an individual cartridge is wired up for using the
 // extra 2 bit register for RAM vs. ROM
-impl CartridgeMemoryBankController for MBC1 {
+impl CartridgeMapper for MBC1 {
     fn read_rom(&self, address: u16) -> Option<u8> {
         let mut address = address as usize;
         let mut bank = self.rom_bank as usize;
