@@ -1,4 +1,4 @@
-use cartridge::CartridgeMemoryBankController;
+use cartridge::CartridgeMapper;
 use mockall::automock;
 
 use crate::utils::{Merge, Split};
@@ -63,14 +63,14 @@ const DMG_RES_SIZE: usize = (DMG_RES_END - DMG_RES_START + 1) as usize;
 
 /// A Struct Storing the memory of an original Game Boy (DMG) system
 pub struct DmgMemoryController {
-    cartridge: Box<dyn CartridgeMemoryBankController>,
+    cartridge: Box<dyn CartridgeMapper>,
     ram: [u8; DMG_RAM_SIZE],
     vram: [u8; DMG_VRAM_SIZE],
     system: [u8; DMG_RES_SIZE],
 }
 
 impl DmgMemoryController {
-    pub fn new(cartridge: Box<dyn CartridgeMemoryBankController>) -> DmgMemoryController {
+    pub fn new(cartridge: Box<dyn CartridgeMapper>) -> DmgMemoryController {
         DmgMemoryController {
             cartridge,
             ram: [0; DMG_VRAM_SIZE],
@@ -154,14 +154,14 @@ impl MemoryController for DmgMemoryController {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use mockall::predicate::eq;
-    use crate::memory::cartridge::MockCartridgeMemoryBankController;
+    use crate::memory::cartridge::MockCartridgeMapper;
     use super::*;
 
     #[test]
     fn test_rom_write_fails() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_write_rom()
             .return_const(Err(MemoryWriteError));
         let mut controller = DmgMemoryController::new(Box::new(mock));
@@ -176,7 +176,7 @@ mod test {
         // NOTE - I couldn't figure out how to put in a mock Option<&u8>
         // into this without doing some jank static lifetime stuff so I'm having it
         // return None and checking that the address gets passed correctly
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_read_rom()
             .times(1)
             .with(eq(42))
@@ -190,7 +190,7 @@ mod test {
 
     #[test]
     fn test_vram_io() {
-        let mock = MockCartridgeMemoryBankController::new();
+        let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
         assert_eq!(controller.load_byte(0x8000), Some(0));
@@ -203,7 +203,7 @@ mod test {
 
     #[test]
     fn test_cart_ram_read_success() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_read_mem()
             .with(eq(42))
             .return_const(Some(0x22));
@@ -216,7 +216,7 @@ mod test {
 
     #[test]
     fn test_cart_ram_read_fail() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_read_mem()
             .with(eq(42))
             .return_const(None);
@@ -229,7 +229,7 @@ mod test {
 
     #[test]
     fn test_cart_ram_write_fail() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_write_mem()
             .with(eq(42), eq(42))
             .return_const(Err(MemoryWriteError));
@@ -242,7 +242,7 @@ mod test {
 
     #[test]
     fn test_ram_io() {
-        let mock = MockCartridgeMemoryBankController::new();
+        let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
         assert_eq!(controller.load_byte(0xC042), Some(0));
@@ -255,7 +255,7 @@ mod test {
 
     #[test]
     fn test_reserved_io() {
-        let mock = MockCartridgeMemoryBankController::new();
+        let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
         assert_eq!(controller.load_byte(0xFE42), Some(0));
@@ -268,7 +268,7 @@ mod test {
 
     #[test]
     fn test_load_half_word_valid_address() {
-        let mock = MockCartridgeMemoryBankController::new();
+        let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
         controller.store_byte(DMG_RAM_START, 0x04).unwrap();
         controller.store_byte(DMG_RAM_START + 1, 0x28).unwrap();
@@ -280,7 +280,7 @@ mod test {
 
     #[test]
     fn test_load_half_word_invalid_first_byte() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_read_mem()
             .with(eq(0x1FFF))
             .return_const(None);
@@ -293,7 +293,7 @@ mod test {
 
     #[test]
     fn test_load_half_word_invalid_second_byte() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_read_mem()
             .with(eq(0))
             .return_const(None);
@@ -306,7 +306,7 @@ mod test {
 
     #[test]
     fn test_store_half_word_valid_address() {
-        let mock = MockCartridgeMemoryBankController::new();
+        let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
         let result = controller.store_half_word(DMG_RAM_START, 0x0428);
@@ -318,7 +318,7 @@ mod test {
 
     #[test]
     fn test_store_half_byte_invalid_first_byte() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_write_rom()
             .with(eq(DMG_ROM_END), eq(0x08))
             .return_const(Err(MemoryWriteError));
@@ -335,7 +335,7 @@ mod test {
 
     #[test]
     fn test_store_half_byte_invalid_second_byte() {
-        let mut mock = MockCartridgeMemoryBankController::new();
+        let mut mock = MockCartridgeMapper::new();
         mock.expect_write_mem()
             .with(eq(0), eq(0x06))
             .return_const(Err(MemoryWriteError));
