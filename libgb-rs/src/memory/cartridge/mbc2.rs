@@ -165,4 +165,62 @@ mod tests {
 
         assert!(result.is_err(), "Should return error when ROM write address is out of bounds");
     }
+    
+    #[test]
+    fn test_ram_read() {
+        let rom = vec![];
+        let mut ram = [0; MBC2_MEM_SIZE];
+        ram[0x1FF] = 42;
+        let mut mbc2 = init_mapper(rom, ram);
+
+        let enable_result = mbc2.write_rom(0x000A, 0x0A);
+        let result = mbc2.read_mem(0x1FF);
+        let repeat_result = mbc2.read_mem(0x3FF);
+
+        assert!(enable_result.is_ok(), "Should be able to enable RAM");
+        assert_eq!(result, Some(42), "Should be able to read from memory");
+        assert_eq!(repeat_result, Some(42), "Should repeat when reading past max address");
+    }
+
+    #[test]
+    fn test_ram_disabled_read() {
+        let rom = vec![];
+        let ram = [0; MBC2_MEM_SIZE];
+        let mbc2 = init_mapper(rom, ram);
+
+        let result = mbc2.read_mem(0x42);
+
+        assert_eq!(result, Some(0xFF), "Should return '0xFF' when RAM is disabled");
+    }
+
+    #[test]
+    fn test_ram_write() {
+        let rom = vec![];
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+
+        let enable_result = mbc2.write_rom(0x02FA, 0x0A);
+        let write_result = mbc2.write_mem(0x42, 0x77);
+        let write_repeat_result = mbc2.write_mem(0x442, 0x88);
+        let written_value = mbc2.read_mem(0x42);
+
+        assert!(enable_result.is_ok(), "Should be able to enable RAM");
+        assert_eq!(write_result, Ok(0), "Should be able to write to RAM");
+        assert_eq!(
+            write_repeat_result, Ok(0x07), 
+            "Should repeat when writing past max address, and first half-byte should be cut off"
+        );
+        assert_eq!(written_value, Some(0x08), "Previous call should have changed value in RAM");
+    }
+    
+    #[test]
+    fn test_ram_disabled_write() {
+        let rom = vec![];
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+        
+        let result = mbc2.write_mem(0xBE, 0xEF);
+
+        assert_eq!(result, Ok(0xFF), "Should ignore writes when memory is disabled");
+    }
 }
