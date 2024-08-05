@@ -14,18 +14,23 @@ pub struct MBC2 {
 
 impl CartridgeMapper for MBC2 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        let address = address as usize;
+        let mut address = address as usize;
         let mut bank = self.bank as usize;
         if address < ROM_BANK_SIZE {
             bank = 0;
+        } else {
+            address -= ROM_BANK_SIZE
         }
         
-        self.rom.get(bank)?
+        self.rom.get(bank % self.rom.len())?
             .get(address)
             .copied()
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
+        if address > 0x7FFF {
+            return Err(MemoryWriteError);
+        }
         if address >= (ROM_BANK_SIZE as u16) {
             return Ok(());
         }
@@ -34,8 +39,8 @@ impl CartridgeMapper for MBC2 {
         if address & 0x0100 == 0 {
            self.ram_enabled = data == 0x0A; 
         } else {
-            let bank = data & 0xF;
-            self.bank = if bank != 0 { bank } else { 1 }
+            let bank = data & 0x1F;
+            self.bank = if bank != 0 { bank } else { 1 };
         }
         Ok(())
     }
@@ -65,5 +70,99 @@ impl CartridgeMapper for MBC2 {
         *half_byte = data & 0xF;
 
         Ok(old_value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init_mapper(rom: Vec<RomBank>, ram: [u8; MBC2_MEM_SIZE]) -> MBC2 {
+        MBC2 {
+            rom,
+            ram,
+            bank: 1,
+            ram_enabled: false,
+            has_battery: false
+        }
+    }
+
+    #[test]
+    fn test_read_bank_0() {
+        let mut rom = vec![[0; ROM_BANK_SIZE]; 2];
+        rom[0][0x4] = 0x28;
+        let ram = [0; MBC2_MEM_SIZE];
+        let mbc2 = init_mapper(rom, ram);
+
+        let result = mbc2.read_rom(4);
+        
+        assert_eq!(result, Some(0x28), "Should be able to read from first half");
+    }
+
+    #[test]
+    fn test_read_bank_0_after_switch() {
+        let mut rom = vec![[0; ROM_BANK_SIZE]; 4];
+        rom[0][0x4] = 0x28;
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+
+        let write_result = mbc2.write_rom(0x0106, 3);
+        let read_result = mbc2.read_rom(0x0004);
+
+        assert!(write_result.is_ok(), "Should be able to change ROM banks successfully");
+        assert_eq!(read_result, Some(0x28), "Should still read from bank 0 in first half");
+    }
+
+    #[test]
+    fn test_bank_switching() {
+        let mut rom = vec![[0; ROM_BANK_SIZE]; 32];
+        rom[1][0x3FFF] = 0xBE;
+        rom[28][0x4] = 0x07;
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+
+        let bank0_read_result = mbc2.read_rom(0x7FFF);
+        let write_result = mbc2.write_rom(0x0106, 28);
+        let bank28_read_result = mbc2.read_rom(0x4004);
+
+        assert_eq!(bank0_read_result, Some(0xBE), "Should be able to read from bank 1");
+        assert!(write_result.is_ok(), "Should be able to switch banks");
+        assert_eq!(bank28_read_result, Some(0x7), "Should be able to read from bank 28");
+    }
+
+    #[test]
+    fn test_switch_to_bank_0() {
+        let mut rom = vec![[0; ROM_BANK_SIZE]; 32];
+        rom[1][0x42] = 0x42;
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+
+        let write_result = mbc2.write_rom(0x0106, 0);
+        let read_result = mbc2.read_rom(0x4042);
+
+        assert!(write_result.is_ok(), "Should still be able to switch to bank 0");
+        assert_eq!(read_result, Some(0x42), "Switching to bank 0 should switch to bank 1 instead");
+    }
+
+    #[test]
+    fn test_invalid_rom_read() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 32];
+        let ram = [0; MBC2_MEM_SIZE];
+        let mbc2 = init_mapper(rom, ram);
+
+        let result = mbc2.read_rom(0x8000);
+
+        assert!(result.is_none(), "Should return none when ROM read address is out of bounds");
+    }
+
+    #[test]
+    fn test_invalid_rom_write() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 32];
+        let ram = [0; MBC2_MEM_SIZE];
+        let mut mbc2 = init_mapper(rom, ram);
+        
+        let result = mbc2.write_rom(0x8000, 0xFE);
+
+        assert!(result.is_err(), "Should return error when ROM write address is out of bounds");
     }
 }
