@@ -3,8 +3,10 @@ use crate::memory::MemoryWriteError;
 
 mod basicrom;
 mod mbc1;
+mod mbc2;
 pub use basicrom::RomOnlyCartridge;
 pub use mbc1::MBC1;
+pub use mbc2::MBC2;
 
 const ROM_BANK_SIZE: usize = 16384;
 const RAM_BANK_SIZE: usize = 8192;

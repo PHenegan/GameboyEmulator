@@ -36,10 +36,16 @@ emulation as well.
 **This is an empty repo right now. Nothing works, everything is left. At this point, this list is 
 really just a way for me to itemize the order in which I want to try to do everything.**
 
-- My first step is going to be working on organizing a layout for the CPU and Memory.
-  - This might involve implementing a good portion of the ISA instructions first. I'm not too sure.
-- I'm kind of unsure of how I'm going to tackle the memory addresses, so I may try to do more
-  research on how that works first.
+- There is a basic skeleton for the CPU registers, as well as the functions needed for memory
+  access by the CPU. See the memory/mod.rs file.
+- There is a trait for handling reads/writes to cartridge memory. *It is not necessarily finalized
+  because I haven't added save support or timer support*
+  - Implementations exist for unmapped cartridges, MBC1, and MBC2 cartridges. At the very least,
+    I will get MBC1 -> MBC3 working, and probably MBC5/7 as well (though those are lower priority
+    because they are mostly for GBC games)
+  - The constructors currently implemented are filler and will likely be removed or made private.
+    This is because I wanted to wait until I have the logic for several controllers implemented
+    before making the logic that actually loads ROM and RAM data into them.
 - I have some idea from watching a technical video, but I'm unclear on where the PPU fits into
   the program's structure. I'll likely do more research into that as well
 
