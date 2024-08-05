@@ -1,8 +1,8 @@
 use crate::memory::MemoryWriteError;
 
-use super::{CartridgeMapper, RomBank};
+use super::{CartridgeMapper, RomBank, ROM_BANK_SIZE};
 
-pub const MBC2_MEM_SIZE = 512;
+pub const MBC2_MEM_SIZE: usize = 512;
 
 pub struct MBC2 {
     rom: Vec<RomBank>,
@@ -18,7 +18,18 @@ impl CartridgeMapper for MBC2 {
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
-        todo!()
+        if address >= (ROM_BANK_SIZE as u16) {
+            return Ok(());
+        }
+        // look at bit 8 to check whether the rom bank should be changed
+        // or the ram should be enabled
+        if address & 0x0100 == 0 {
+           self.ram_enabled = data == 0x0A; 
+        } else {
+            let bank = data & 0xF;
+            self.bank = if bank != 0 { bank } else { 1 }
+        }
+        Ok(())
     }
 
     fn read_mem(&self, address: u16) -> Option<u8> {
