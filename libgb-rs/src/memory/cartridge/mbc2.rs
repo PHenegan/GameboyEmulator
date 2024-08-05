@@ -14,7 +14,15 @@ pub struct MBC2 {
 
 impl CartridgeMapper for MBC2 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        todo!()
+        let address = address as usize;
+        let mut bank = self.bank as usize;
+        if address < ROM_BANK_SIZE {
+            bank = 0;
+        }
+        
+        self.rom.get(bank)?
+            .get(address)
+            .copied()
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
