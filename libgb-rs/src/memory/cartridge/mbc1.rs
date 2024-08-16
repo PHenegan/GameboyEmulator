@@ -1,5 +1,7 @@
 use crate::memory::MemoryWriteError;
 
+use super::{CartridgeMapper, MemBank, RomBank, ROM_BANK_SIZE};
+
 /// # StorageMode
 /// An Enum representing the banking mode of an MBC1 Cartridge. 
 /// - In "ROM" Mode the the cartridge can read from up to 2 MiB of RAM (128 banks) and 8 KiB
@@ -22,9 +24,6 @@ impl From<u8> for StorageMode {
         if value % 2 == 0 { StorageMode::ROM } else { StorageMode::RAM }
     }
 }
-
-
-use super::{CartridgeMapper, MemBank, RomBank, ROM_BANK_SIZE};
 
 /// # MBC1
 /// A struct which recreates the MBC1 (Memory Bank Controller 1) cartridge functionality

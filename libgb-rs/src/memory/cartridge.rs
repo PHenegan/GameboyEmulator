@@ -4,6 +4,8 @@ use crate::memory::MemoryWriteError;
 mod basicrom;
 mod mbc1;
 mod mbc2;
+mod mbc3;
+
 pub use basicrom::RomOnlyCartridge;
 pub use mbc1::MBC1;
 pub use mbc2::MBC2;
