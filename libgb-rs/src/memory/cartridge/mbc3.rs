@@ -41,7 +41,7 @@ impl CartridgeMapper for MBC3 {
                 self.rom_bank = data & 0x7F;
                 Ok(())
             }
-            SET_RAM_BANK_START..LATCH_CLOCK_START {
+            SET_RAM_BANK_START..LATCH_CLOCK_START => {
                 self.ram_bank = data & 0x0F;
                 Ok(())
             }
