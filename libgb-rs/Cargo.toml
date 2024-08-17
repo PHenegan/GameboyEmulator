@@ -5,4 +5,4 @@ edition = "2021"
 rust-version = "1.79.0"
 
 [dependencies]
-mockall = "0.12.1"
+mockall = "0.13.0"
