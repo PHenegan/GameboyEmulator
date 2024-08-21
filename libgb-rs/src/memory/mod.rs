@@ -4,6 +4,7 @@ use mockall::automock;
 use crate::utils::{Merge, Split};
 
 pub mod cartridge;
+mod rtc;
 
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct MemoryWriteError;
