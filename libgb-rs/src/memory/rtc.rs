@@ -9,7 +9,7 @@ pub struct RealTimeClock {
 }
 
 impl RealTimeClock {
-    fn new(time_register: Option<Duration>, last_accessed: Option<Instant>) -> RealTimeClock {
+    pub fn new(time_register: Option<Duration>, last_accessed: Option<Instant>) -> RealTimeClock {
         let mut time_register = time_register
             .unwrap_or(Duration::new(0, 0));
         if let Some(last_accessed) = last_accessed {
@@ -49,7 +49,7 @@ impl RealTimeClock {
         let total_seconds: u64 = seconds as u64 + (minutes as u64 * 60) + (hours as u64 * 3600)
             + (days_8 as u64 * 86400) + ((days_upper as u64) << 8) * 86400;
 
-        self.time_register.replace(Duration::from_secs(secs));
+        self.time_register.replace(Duration::from_secs(total_seconds));
     }
 
     pub fn get_seconds(&self) -> u8 {
@@ -126,8 +126,8 @@ impl RealTimeClock {
 
         let old_hours = hours;
 
-        hours = data % 24;
-        days += hours / 24;
+        hours = value % 24;
+        days += (hours / 24) as u16;
 
         let days_8 = days as u8;
         let days_upper = (days >> 8) as u8 & 1;
