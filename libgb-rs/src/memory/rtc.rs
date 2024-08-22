@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ops::{AddAssign};
+use std::ops::AddAssign;
 use std::time::{Duration, Instant};
 
 pub struct RealTimeClock {
@@ -45,8 +45,11 @@ impl RealTimeClock {
         )
     }
 
-    fn set_time(& mut self, seconds: u8, minutes: u8, hours: u8, days_8: u8, days_upper: u8) {
-        let total_seconds: u32 = seconds + (minutes * 60) + (hours * 3600) + (days_8 * )
+    fn set_time(&mut self, seconds: u8, minutes: u8, hours: u8, days_8: u8, days_upper: u8) {
+        let total_seconds: u64 = seconds as u64 + (minutes as u64 * 60) + (hours as u64 * 3600)
+            + (days_8 as u64 * 86400) + ((days_upper as u64) << 8) * 86400;
+
+        self.time_register.replace(Duration::from_secs(secs));
     }
 
     pub fn get_seconds(&self) -> u8 {
@@ -87,18 +90,69 @@ impl RealTimeClock {
         minutes += value / 60;
         hours += minutes / 60;
         days += (hours / 24) as u16;
+        let days_8 = days as u8;
+        let days_upper = (days >> 8) as u8 & 1;
 
         minutes = minutes / 60;
         hours = hours / 24;
 
+        self.set_time(seconds, minutes, hours, days_8, days_upper);
+
         old_seconds
     }
 
-    pub fn set_minutes(&self, value: u8) -> {
+    pub fn set_minutes(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (mut _seconds, mut minutes, mut hours, mut days) = self.split_values();
+        let (secs, mut minutes, mut hours, mut days) = self.split_values();
 
-        let minutes
+        let old_minutes = minutes;
 
+        minutes = value % 60;
+        hours += value / 60;
+        days += (hours / 24) as u16;
+        let days_8 = days as u8;
+        let days_upper = (days >> 8) as u8 & 1;
+
+        hours = hours / 24;
+
+        self.set_time(secs, minutes, hours, days_8, days_upper);
+
+        old_minutes
+    }
+
+    pub fn set_hours(&mut self, value: u8) -> u8 {
+        self.update_time();
+        let (secs, minutes, mut hours, mut days) = self.split_values();
+
+        let old_hours = hours;
+
+        hours = data % 24;
+        days += hours / 24;
+
+        let days_8 = days as u8;
+        let days_upper = (days >> 8) as u8 & 1;
+
+        self.set_time(secs, minutes, hours, days_8, days_upper);
+
+        old_hours
+    }
+
+    pub fn set_days_lower(&mut self, value: u8) -> u8 {
+        self.update_time();
+        let (secs, minutes, hours, days) = self.split_values();
+
+        self.set_time(secs, minutes, hours, value, (days >> 8) as u8 & 1);
+
+        days as u8
+    }
+
+    pub fn set_days_upper(&mut self, value: u8) -> u8 {
+        self.update_time();
+        let (secs, minutes, hours, days) = self.split_values();
+
+        let old_days_upper = (days >> 8) as u8 & 1;
+        self.set_time(secs, minutes, hours, days as u8, value);
+
+        old_days_upper
     }
 }
