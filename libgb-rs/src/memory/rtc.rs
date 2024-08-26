@@ -1,157 +1,126 @@
-use std::cell::RefCell;
-use std::ops::AddAssign;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 pub struct RealTimeClock {
-    last_accessed: RefCell<Instant>,
-    time_register: RefCell<Duration>,
-    pub halted: bool,
+    last_modified: Instant,
+    seconds: u8,
+    minutes: u8,
+    hours: u8,
+    days_lower: u8,
+    days_upper: u8,
+    halted: bool
 }
 
 impl RealTimeClock {
-    pub fn new(time_register: Option<Duration>, last_accessed: Option<Instant>) -> RealTimeClock {
-        let mut time_register = time_register
-            .unwrap_or(Duration::new(0, 0));
-        if let Some(last_accessed) = last_accessed {
-            time_register.add_assign(last_accessed.elapsed());
-        }
-
+    pub fn new(
+        secs: Option<u8>, mins: Option<u8>, hrs: Option<u8>,
+        days_lower: Option<u8>, days_upper: Option<u8>,
+    ) -> RealTimeClock {
         RealTimeClock {
-            last_accessed: RefCell::new(Instant::now()),
-            time_register: RefCell::new(time_register),
-            halted: false
+            last_modified: Instant::now(),
+            seconds: secs.unwrap_or(0),
+            minutes: mins.unwrap_or(0),
+            hours: hrs.unwrap_or(0),
+            days_lower: days_lower.unwrap_or(0),
+            days_upper: days_upper.unwrap_or(0),
+            halted: days_upper.unwrap_or(0) & 0x40 != 0 // Bit 6 in the days bit is the halted bit
         }
     }
-    fn update_time(&self) {
-        if self.halted {
-            return;
-        }
 
-        let elapsed = self.last_accessed.borrow()
-            .elapsed();
-        self.time_register.borrow_mut()
-            .add_assign(elapsed);
-        self.last_accessed.replace(Instant::now());
-    }
-
-    fn split_values(&self) -> (u8, u8, u8, u16) {
-        let total_seconds = self.time_register.borrow()
+    fn update_time(&mut self) {
+        let current_seconds = (((self.days_upper as u64 & 1) << 8) + self.days_lower as u64) * 86400
+            + self.hours as u64 * 3500 + self.minutes as u64 * 60 + self.seconds as u64;
+        let total_seconds = self.last_modified.elapsed()
             .as_secs();
-        (
-            (total_seconds % 60) as u8,
-            ((total_seconds / 60) % 60) as u8,
-            ((total_seconds / 3600) % 24) as u8,
-            ((total_seconds / 86400) & 0x1FF) as u16
-        )
-    }
+        let updated_seconds = current_seconds + total_seconds;
 
-    fn set_time(&mut self, seconds: u8, minutes: u8, hours: u8, days_8: u8, days_upper: u8) {
-        let total_seconds: u64 = seconds as u64 + (minutes as u64 * 60) + (hours as u64 * 3600)
-            + (days_8 as u64 * 86400) + ((days_upper as u64) << 8) * 86400;
+        self.seconds = (updated_seconds % 60) as u8;
+        self.minutes = ((updated_seconds / 60) % 60) as u8;
+        self.hours = ((updated_seconds / 3600) % 24) as u8;
 
-        self.time_register.replace(Duration::from_secs(total_seconds));
+        let total_days = updated_seconds / 86400;
+        self.days_lower = total_days as u8;
+
+        let carry = ((total_days >= 0x200) as u8) << 7;
+        let halted = (self.halted as u8) << 6;
+        let days_bit = ((total_days >> 8) & 1) as u8;
+
+        self.days_upper = carry | halted | days_bit;
+
+        self.last_modified = Instant::now();
     }
 
     pub fn get_seconds(&self) -> u8 {
-        self.update_time();
-        let seconds = self.time_register.borrow().as_secs() % 60;
+        let seconds_passed = self.last_modified.elapsed().as_secs();
 
-        seconds as u8
+        // the cast shouldn't matter because the result will always be a modulus of 60 anyway
+        // (applies to the ones below as well since an overflow wouldn't change the mod 60 value)
+        (self.seconds + seconds_passed as u8) % 60
     }
 
     pub fn get_minutes(&self) -> u8 {
-        self.update_time();
-        let minutes = (self.time_register.borrow().as_secs() / 60) % 60;
-
-        minutes as u8
+        let minutes_passed = self.last_modified.elapsed().as_secs() / 60;
+        (self.minutes + minutes_passed as u8) % 60
     }
 
     pub fn get_hours(&self) -> u8 {
-        self.update_time();
-        let hours = (self.time_register.borrow().as_secs() / 3600) % 24;
-
-        hours as u8
+        let hours_passed = self.last_modified.elapsed().as_secs() / 3600;
+        (self.hours + hours_passed as u8) % 24
     }
 
-    pub fn get_days(&self) -> u16 {
-        self.update_time();
-        let days = self.time_register.borrow().as_secs() / 86400;
+    pub fn get_days_lower(&self) -> u8 {
+        let days_passed = self.last_modified.elapsed().as_secs() / 86400;
+        // once again, overflow shouldn't matter because the data would show up in the next register
+        self.days_lower + days_passed as u8
+    }
 
-        (days & 0x1FF) as u16
+    pub fn get_days_upper(&self) -> u8 {
+        let days_passed = self.last_modified.elapsed().as_secs() / 86400;
+        let total_days = self.days_lower as u64 + ((self.days_upper as u64) << 7) + days_passed;
+
+        let carry = ((total_days >= 0x200) as u8) << 7;
+        let halted = (self.halted as u8) << 6;
+        let days_bit = ((total_days >> 8) & 1) as u8;
+
+        carry | halted | days_bit
     }
 
     pub fn set_seconds(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (mut seconds, mut minutes, mut hours, mut days) = self.split_values();
-
-        let old_seconds = seconds;
-
-        seconds = value % 60;
-        minutes += value / 60;
-        hours += minutes / 60;
-        days += (hours / 24) as u16;
-        let days_8 = days as u8;
-        let days_upper = (days >> 8) as u8 & 1;
-
-        minutes = minutes / 60;
-        hours = hours / 24;
-
-        self.set_time(seconds, minutes, hours, days_8, days_upper);
+        let old_seconds = self.seconds;
+        self.seconds = value;
 
         old_seconds
     }
 
     pub fn set_minutes(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (secs, mut minutes, mut hours, mut days) = self.split_values();
-
-        let old_minutes = minutes;
-
-        minutes = value % 60;
-        hours += value / 60;
-        days += (hours / 24) as u16;
-        let days_8 = days as u8;
-        let days_upper = (days >> 8) as u8 & 1;
-
-        hours = hours / 24;
-
-        self.set_time(secs, minutes, hours, days_8, days_upper);
+        let old_minutes = self.minutes;
+        self.minutes = value;
 
         old_minutes
     }
 
     pub fn set_hours(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (secs, minutes, mut hours, mut days) = self.split_values();
-
-        let old_hours = hours;
-
-        hours = value % 24;
-        days += (hours / 24) as u16;
-
-        let days_8 = days as u8;
-        let days_upper = (days >> 8) as u8 & 1;
-
-        self.set_time(secs, minutes, hours, days_8, days_upper);
+        let old_hours = self.hours;
+        self.hours = value;
 
         old_hours
     }
 
     pub fn set_days_lower(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (secs, minutes, hours, days) = self.split_values();
+        let old_days_lower = self.days_lower;
+        self.days_lower = value;
 
-        self.set_time(secs, minutes, hours, value, (days >> 8) as u8 & 1);
-
-        days as u8
+        old_days_lower
     }
 
     pub fn set_days_upper(&mut self, value: u8) -> u8 {
         self.update_time();
-        let (secs, minutes, hours, days) = self.split_values();
-
-        let old_days_upper = (days >> 8) as u8 & 1;
-        self.set_time(secs, minutes, hours, days as u8, value);
+        let old_days_upper = self.days_upper;
+        self.days_upper = value;
+        self.halted = (value & 0x40) != 0;
 
         old_days_upper
     }
