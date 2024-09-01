@@ -9,7 +9,8 @@ pub struct RealTimeClock {
     days_upper: u8,
     halted: bool
 }
-
+// TODO - If a call to set seconds, minutes, or hours is greater than the proper range (60/24),
+// should it impact the next unit of time?
 impl RealTimeClock {
     pub fn new(
         secs: Option<u8>, mins: Option<u8>, hrs: Option<u8>,
@@ -40,17 +41,23 @@ impl RealTimeClock {
         self.seconds = (updated_seconds % 60) as u8;
         self.minutes = ((updated_seconds / 60) % 60) as u8;
         self.hours = ((updated_seconds / 3600) % 24) as u8;
-
         let total_days = updated_seconds / 86400;
         self.days_lower = total_days as u8;
+        self.days_upper = self.create_days_upper(total_days);
 
-        let carry = ((total_days >= 0x200) as u8) << 7;
+        self.last_modified = Instant::now();
+    }
+
+    fn create_days_upper(&self, total_days: u64) -> u8 {
+        // NOTE - the carry flag should never be "unset" unless explicitly done so by the
+        // program
+        let carry = (((total_days >= 0x200) as u8) << 7) | (self.days_upper & 0x80);
         let halted = (self.halted as u8) << 6;
         let days_bit = ((total_days >> 8) & 1) as u8;
 
-        self.days_upper = carry | halted | days_bit;
-
-        self.last_modified = Instant::now();
+        // TODO - is there defined behavior for how the middle 5 bits are set? Should I be trying
+        // to preserve them like the carry bit?
+        carry | halted | days_bit
     }
 
     pub fn get_seconds(&self) -> u8 {
@@ -99,17 +106,14 @@ impl RealTimeClock {
         }
             
         let days_passed = self.last_modified.elapsed().as_secs() / 86400;
-        let total_days = self.days_lower as u64 + ((self.days_upper as u64) << 7) + days_passed;
+        let total_days = self.days_lower as u64 + ((self.days_upper as u64 & 1) << 8) + days_passed;
 
-        let carry = ((total_days >= 0x200) as u8) << 7;
-        let halted = (self.halted as u8) << 6;
-        let days_bit = ((total_days >> 8) & 1) as u8;
-
-        carry | halted | days_bit
+        self.create_days_upper(total_days)
     }
 
     pub fn set_seconds(&mut self, value: u8) -> u8 {
         self.update_time();
+
         let old_seconds = self.seconds;
         self.seconds = value;
 
@@ -118,6 +122,7 @@ impl RealTimeClock {
 
     pub fn set_minutes(&mut self, value: u8) -> u8 {
         self.update_time();
+
         let old_minutes = self.minutes;
         self.minutes = value;
 
@@ -126,6 +131,7 @@ impl RealTimeClock {
 
     pub fn set_hours(&mut self, value: u8) -> u8 {
         self.update_time();
+
         let old_hours = self.hours;
         self.hours = value;
 
@@ -134,6 +140,7 @@ impl RealTimeClock {
 
     pub fn set_days_lower(&mut self, value: u8) -> u8 {
         self.update_time();
+
         let old_days_lower = self.days_lower;
         self.days_lower = value;
 
@@ -142,6 +149,7 @@ impl RealTimeClock {
 
     pub fn set_days_upper(&mut self, value: u8) -> u8 {
         self.update_time();
+
         let old_days_upper = self.days_upper;
         self.days_upper = value;
         self.halted = (value & 0x40) != 0;
@@ -160,36 +168,38 @@ mod tests {
         RealTimeClock::new(None, None, None, None, None)
     }
 
-    fn test_registers(rtc: &RealTimeClock, days_up: u8, days_low: u8, hrs: u8, mins: u8, secs: u8) {
-        let seconds = rtc.get_seconds();
-        let minutes = rtc.get_minutes();
-        let hours = rtc.get_hours();
-        let days_lower = rtc.get_days_lower();
-        let days_upper = rtc.get_days_upper();
+    impl RealTimeClock {
+        fn test_registers(&self, days_up: u8, days_low: u8, hrs: u8, mins: u8, secs: u8) {
+            let seconds = self.get_seconds();
+            let minutes = self.get_minutes();
+            let hours = self.get_hours();
+            let days_lower = self.get_days_lower();
+            let days_upper = self.get_days_upper();
 
-        assert_eq!(seconds, secs, "seconds should be updated correctly");
-        assert_eq!(minutes, mins, "minutes should be updated correctly");
-        assert_eq!(hours, hrs, "hours should be updated correctly");
-        assert_eq!(days_lower, days_low, "days (lower register) should be updated correctly");
-        assert_eq!(days_upper, days_up, "days (upper register) should be updated correctly");
+            assert_eq!(seconds, secs, "seconds should be updated correctly");
+            assert_eq!(minutes, mins, "minutes should be updated correctly");
+            assert_eq!(hours, hrs, "hours should be updated correctly");
+            assert_eq!(days_lower, days_low, "days (lower register) should be updated correctly");
+            assert_eq!(days_upper, days_up, "days (upper register) should be updated correctly");
+        }
     }
-    
-    #[test]
+
+        #[test]
     fn test_updates_seconds() {
         let mut rtc = init_rtc();
         // subtract 10 seconds from the access time to fake as if 10 seconds went by
         rtc.last_modified -= Duration::new(10, 0);
 
-        test_registers(&rtc, 0, 0, 0, 0, 10);
+        rtc.test_registers(0, 0, 0, 0, 10);
     }
 
     #[test]
     fn test_updates_minutes() {
         let mut rtc = init_rtc();
-
+        
         rtc.last_modified -= Duration::new(90, 0);
 
-        test_registers(&rtc, 0, 0, 0, 1, 30);
+        rtc.test_registers(0, 0, 0, 1, 30);
     }
 
     #[test]
@@ -197,7 +207,7 @@ mod tests {
         let mut rtc = init_rtc();
         rtc.last_modified -= Duration::new(7321, 0);
 
-        test_registers(&rtc, 0, 0, 2, 2, 1);
+        rtc.test_registers(0, 0, 2, 2, 1);
     }
 
     #[test]
@@ -205,7 +215,7 @@ mod tests {
         let mut rtc = init_rtc();
         rtc.last_modified -= Duration::new(270_183, 0);
 
-        test_registers(&rtc, 0, 3, 3, 3, 3);
+        rtc.test_registers(0, 3, 3, 3, 3);
     }
 
     #[test]
@@ -214,7 +224,7 @@ mod tests {
         let dur_seconds = 511 * 86400 + 3842;
         rtc.last_modified -= Duration::new(dur_seconds, 0);
 
-        test_registers(&rtc, 1, 255, 1, 4, 2);
+        rtc.test_registers(1, 255, 1, 4, 2);
     }
 
     #[test]
@@ -223,7 +233,56 @@ mod tests {
         let dur_seconds = 512 * 86400;
         rtc.last_modified -= Duration::new(dur_seconds, 0);
 
-        test_registers(&rtc, 0x80, 0, 0, 0, 0);
+        rtc.test_registers(0x80, 0, 0, 0, 0);
+    }
 
+    #[test]
+    fn test_set_seconds() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(61, 0);
+
+        rtc.set_seconds(5);
+
+        rtc.test_registers(0, 0, 0, 1, 5);
+    }
+
+    #[test]
+    fn test_set_minutes() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(3661, 0);
+
+        rtc.set_minutes(42);
+
+        rtc.test_registers(0, 0, 1, 42, 1);
+    }
+
+    #[test]
+    fn test_set_hours() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(86625, 0);
+
+        rtc.set_hours(2);
+
+        rtc.test_registers(0, 1, 2, 3, 45);
+    }
+    
+    #[test]
+    fn test_set_days_lower() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(511 * 86400 + 7420, 0);
+
+        rtc.set_days_lower(42);
+
+        rtc.test_registers(1, 42, 2, 3, 40)
+    }
+
+    #[test]
+    fn test_set_days_upper() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(30 * 86400 + 11190, 0);
+
+        rtc.set_days_upper(0xFF);
+
+        rtc.test_registers(0xFF, 30, 3, 6, 30);
     }
 }
