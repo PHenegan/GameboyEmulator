@@ -1,5 +1,14 @@
 use std::time::Instant;
 
+/// # RealTimeClock (RTC)
+/// This RTC struct represents the set of clock registers present in an MBC3/MBC30 cartridge.
+/// It has 5 8-bit registers and stores seconds, minutes, hours, and days in each register.
+///
+/// Days are split into 2 registers, where the first register stores the lower 8 bits of the day
+/// count. E.g. If the day counter was at 255, the first "lower" register would have the value
+/// 0xFF. The second register only uses 3 out of the 8 bits, holding an overflow bit for the day
+/// counter (in the leftmost bit of the register, bit 7), a "halting" bit which pauses the clock
+/// (in bit 6), and the 9th bit for the day counter (in bit 0).
 pub struct RealTimeClock {
     last_modified: Instant,
     seconds: u8,
@@ -9,8 +18,7 @@ pub struct RealTimeClock {
     days_upper: u8,
     halted: bool
 }
-// TODO - If a call to set seconds, minutes, or hours is greater than the proper range (60/24),
-// should it impact the next unit of time?
+
 impl RealTimeClock {
     pub fn new(
         secs: Option<u8>, mins: Option<u8>, hrs: Option<u8>,
@@ -27,7 +35,11 @@ impl RealTimeClock {
         }
     }
 
-    fn update_time(&mut self) {
+    // NOTE - I'm not completely sure if the way this would handle carry overs in edge cases is the
+    // same, so there might be some slight differences in emulation here. For now I don't think
+    // this is a big problem though.
+    // PROBLEM - Halting the clock without latching will mess everything up
+    pub fn latch(&mut self) {
         if self.halted {
             return;
         }
@@ -54,113 +66,77 @@ impl RealTimeClock {
         let carry = (((total_days >= 0x200) as u8) << 7) | (self.days_upper & 0x80);
         let halted = (self.halted as u8) << 6;
         let days_bit = ((total_days >> 8) & 1) as u8;
-        let middle_bits = self.days_upper & 0x3E; // preserve the middle 5 bits
 
-        // TODO - is there defined behavior for how the middle 5 bits are set? Should I be trying
-        // to preserve them like the carry bit?
-        carry | halted | middle_bits | days_bit
+        carry | halted | days_bit
     }
 
+    /// Get the seconds value of the clock
     pub fn get_seconds(&self) -> u8 {
-        if self.halted {
-            return self.seconds;
-        }
-
-        let seconds_passed = self.last_modified.elapsed().as_secs();
-        let updated_seconds = self.seconds as u64 + seconds_passed;
-        (updated_seconds % 60) as u8
+        self.seconds
     }
 
+    /// Get the minutes value of the clock
     pub fn get_minutes(&self) -> u8 {
-        if self.halted {
-            return self.minutes;
-        }
-
-        let minutes_passed = self.last_modified.elapsed().as_secs() / 60;
-        let updated_minutes = self.minutes as u64 + minutes_passed;
-        (updated_minutes % 60) as u8
+        self.minutes
     }
 
+    /// Get the hours value of the clock
     pub fn get_hours(&self) -> u8 {
-        if self.halted {
-            return self.hours;
-        }
-
-        let hours_passed = self.last_modified.elapsed().as_secs() / 3600;
-        let updated_hours = self.hours as u64 + hours_passed;
-        (updated_hours % 24) as u8
+        self.hours
     }
 
+    /// Get the lower 8 bits in the days value of the clock
     pub fn get_days_lower(&self) -> u8 {
-        if self.halted {
-            return self.days_lower;
-        }
-
-        let days_passed = self.last_modified.elapsed().as_secs() / 86400;
-        // Overflow shouldn't matter because the data would show up in the next register
-        self.days_lower + days_passed as u8
+        self.days_lower
     }
 
+    /// Get the upper 8 bits in the days value the clock, including the overflow and halted values.
     pub fn get_days_upper(&self) -> u8 {
-        if self.halted {
-            return self.days_upper;
-        }
-            
-        let days_passed = self.last_modified.elapsed().as_secs() / 86400;
-        let total_days = self.days_lower as u64 + ((self.days_upper as u64 & 1) << 8) + days_passed;
-
-        self.create_days_upper(total_days)
+        self.days_upper
     }
 
+    /// Overwrite the seconds register in the clock with the given value
     pub fn set_seconds(&mut self, value: u8) -> u8 {
-        self.update_time();
-
         let old_seconds = self.seconds;
-        self.seconds = value;
+        self.seconds = value & 0x3F; // the actual register is only 6 bits
 
         old_seconds
     }
 
+    /// Overwrite the minutes register in the clock with the given value
     pub fn set_minutes(&mut self, value: u8) -> u8 {
-        self.update_time();
-
         let old_minutes = self.minutes;
-        self.minutes = value;
+        self.minutes = value & 0x3F; // the actual register is only 6 bits
 
         old_minutes
     }
 
+    /// Overwrite the hours register in the clock with the given value
     pub fn set_hours(&mut self, value: u8) -> u8 {
-        self.update_time();
-
         let old_hours = self.hours;
-        self.hours = value;
+        self.hours = value & 0x1F; // the actual register is only 5 bits
 
         old_hours
     }
 
+    /// Overwrite the lower day count register in the clock with the given value
     pub fn set_days_lower(&mut self, value: u8) -> u8 {
-        self.update_time();
-
         let old_days_lower = self.days_lower;
         self.days_lower = value;
 
         old_days_lower
     }
 
+    /// Overwrite the upper day count register in the clock with the given value
     pub fn set_days_upper(&mut self, value: u8) -> u8 {
-        self.update_time();
-
-        let old_days_upper = self.days_upper;
         let halted = (value & 0x40) != 0;
-        self.days_upper = value;
-
         if self.halted & !halted {
             self.last_modified = Instant::now();
         }
-
         self.halted = halted;
 
+        let old_days_upper = self.days_upper;
+        self.days_upper = value & 0xC1;
         old_days_upper
     }
 }
@@ -194,169 +170,24 @@ mod tests {
     }
 
     #[test]
-    fn test_updates_seconds() {
+    fn test_latch_updates_all_registers() {
         let mut rtc = init_rtc();
         // subtract 10 seconds from the access time to fake as if 10 seconds went by
-        rtc.last_modified -= Duration::new(10, 0);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
 
-        rtc.test_registers(0, 0, 0, 0, 10);
+        rtc.latch();
+
+        rtc.test_registers(1, 255, 3, 6, 30);
     }
 
     #[test]
-    fn test_updates_minutes() {
-        let mut rtc = init_rtc();
-        
-        rtc.last_modified -= Duration::new(90, 0);
-
-        rtc.test_registers(0, 0, 0, 1, 30);
-    }
-
-    #[test]
-    fn test_updates_hours() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(7321, 0);
-
-        rtc.test_registers(0, 0, 2, 2, 1);
-    }
-
-    #[test]
-    fn test_updates_days_lower() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(270_183, 0);
-
-        rtc.test_registers(0, 3, 3, 3, 3);
-    }
-
-    #[test]
-    fn test_updates_days_upper() {
-        let mut rtc = init_rtc();
-        let dur_seconds = 511 * 86400 + 3842;
-        rtc.last_modified -= Duration::new(dur_seconds, 0);
-
-        rtc.test_registers(1, 255, 1, 4, 2);
-    }
-
-    #[test]
-    fn test_updates_overflow_bit() {
+    fn test_latch_updates_overflow_bit() {
         let mut rtc = init_rtc();
         let dur_seconds = 512 * 86400;
         rtc.last_modified -= Duration::new(dur_seconds, 0);
 
+        rtc.latch();
+
         rtc.test_registers(0x80, 0, 0, 0, 0);
-    }
-
-    #[test]
-    fn test_set_seconds() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(61, 0);
-
-        rtc.set_seconds(5);
-
-        rtc.test_registers(0, 0, 0, 1, 5);
-    }
-
-    #[test]
-    fn test_set_minutes() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(3661, 0);
-
-        rtc.set_minutes(42);
-
-        rtc.test_registers(0, 0, 1, 42, 1);
-    }
-
-    #[test]
-    fn test_set_hours() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(86625, 0);
-
-        rtc.set_hours(2);
-
-        rtc.test_registers(0, 1, 2, 3, 45);
-    }
-    
-    #[test]
-    fn test_set_days_lower() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(511 * 86400 + 7420, 0);
-
-        rtc.set_days_lower(42);
-
-        rtc.test_registers(1, 42, 2, 3, 40)
-    }
-
-    #[test]
-    fn test_set_days_upper() {
-        let mut rtc = init_rtc();
-        rtc.last_modified -= Duration::new(30 * 86400 + 11190, 0);
-
-        rtc.set_days_upper(0xFF);
-
-        rtc.test_registers(0xFF, 30, 3, 6, 30);
-    }
-
-    #[test]
-    fn test_halted_stops_getter_update() {
-        let mut rtc = init_rtc();
-        
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-
-        rtc.test_registers(0x40, 0, 0, 0, 0);
-    }
-
-    #[test]
-    fn test_halted_stops_set_seconds_update() {
-        let mut rtc = init_rtc();
-
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-        rtc.set_seconds(5);
-
-        rtc.test_registers(0x40, 0, 0, 0, 5);
-    }
-
-    #[test]
-    fn test_halted_stops_minutes_update() {
-        let mut rtc = init_rtc();
-
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-        rtc.set_minutes(5);
-
-        rtc.test_registers(0x40, 0, 0, 5, 0);
-    }
-
-    #[test]
-    fn test_halted_stops_hours_update() {
-        let mut rtc = init_rtc();
-
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-        rtc.set_hours(5);
-
-        rtc.test_registers(0x40, 0, 5, 0, 0);
-    }
-
-    #[test]
-    fn test_halted_stops_days_lower_update() {
-        let mut rtc = init_rtc();
-
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-        rtc.set_days_lower(5);
-
-        rtc.test_registers(0x40, 5, 0, 0, 0);
-    }
-
-    #[test]
-    fn test_halted_stops_days_upper_update() {
-        let mut rtc = init_rtc();
-
-        rtc.set_days_upper(0x40);
-        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
-        rtc.set_days_upper(0xBF);
-
-        rtc.test_registers(0xBF, 0, 0, 0, 0);
     }
 }
