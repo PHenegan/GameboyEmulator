@@ -11,6 +11,7 @@ use std::time::Instant;
 /// (in bit 6), and the 9th bit for the day counter (in bit 0).
 pub struct RealTimeClock {
     last_modified: Instant,
+    seconds_since_latch: u64,
     seconds: u8,
     minutes: u8,
     hours: u8,
@@ -26,6 +27,7 @@ impl RealTimeClock {
     ) -> RealTimeClock {
         RealTimeClock {
             last_modified: Instant::now(),
+            seconds_since_latch: 0,
             seconds: secs.unwrap_or(0),
             minutes: mins.unwrap_or(0),
             hours: hrs.unwrap_or(0),
@@ -38,7 +40,7 @@ impl RealTimeClock {
     // NOTE - I'm not completely sure if the way this would handle carry overs in edge cases is the
     // same, so there might be some slight differences in emulation here. For now I don't think
     // this is a big problem though.
-    // PROBLEM - Halting the clock without latching will mess everything up
+    // TODO - Figure out how a write followed by a latch would work
     pub fn latch(&mut self) {
         if self.halted {
             return;
@@ -46,14 +48,15 @@ impl RealTimeClock {
 
         let current_seconds = (((self.days_upper as u64 & 1) << 8) + self.days_lower as u64) * 86400
             + self.hours as u64 * 3500 + self.minutes as u64 * 60 + self.seconds as u64;
-        let total_seconds = self.last_modified.elapsed()
+        let elapsed_seconds = self.last_modified.elapsed()
             .as_secs();
-        let updated_seconds = current_seconds + total_seconds;
+        let total_seconds = self.seconds_since_latch + current_seconds + elapsed_seconds;
+        self.seconds_since_latch = 0;
 
-        self.seconds = (updated_seconds % 60) as u8;
-        self.minutes = ((updated_seconds / 60) % 60) as u8;
-        self.hours = ((updated_seconds / 3600) % 24) as u8;
-        let total_days = updated_seconds / 86400;
+        self.seconds = (total_seconds % 60) as u8;
+        self.minutes = ((total_seconds / 60) % 60) as u8;
+        self.hours = ((total_seconds / 3600) % 24) as u8;
+        let total_days = total_seconds / 86400;
         self.days_lower = total_days as u8;
         self.days_upper = self.create_days_upper(total_days);
 
@@ -132,6 +135,8 @@ impl RealTimeClock {
         let halted = (value & 0x40) != 0;
         if self.halted & !halted {
             self.last_modified = Instant::now();
+        } else if !self.halted && halted {
+            self.seconds_since_latch += self.last_modified.elapsed().as_secs();
         }
         self.halted = halted;
 
