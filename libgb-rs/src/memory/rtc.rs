@@ -54,10 +54,11 @@ impl RealTimeClock {
         let carry = (((total_days >= 0x200) as u8) << 7) | (self.days_upper & 0x80);
         let halted = (self.halted as u8) << 6;
         let days_bit = ((total_days >> 8) & 1) as u8;
+        let middle_bits = self.days_upper & 0x3E; // preserve the middle 5 bits
 
         // TODO - is there defined behavior for how the middle 5 bits are set? Should I be trying
         // to preserve them like the carry bit?
-        carry | halted | days_bit
+        carry | halted | middle_bits | days_bit
     }
 
     pub fn get_seconds(&self) -> u8 {
@@ -151,8 +152,14 @@ impl RealTimeClock {
         self.update_time();
 
         let old_days_upper = self.days_upper;
+        let halted = (value & 0x40) != 0;
         self.days_upper = value;
-        self.halted = (value & 0x40) != 0;
+
+        if self.halted & !halted {
+            self.last_modified = Instant::now();
+        }
+
+        self.halted = halted;
 
         old_days_upper
     }
@@ -163,6 +170,8 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    const CHANGE_ALL_REGISTERS: u64 = 86400 * 511 + 11190;
 
     fn init_rtc() -> RealTimeClock {
         RealTimeClock::new(None, None, None, None, None)
@@ -184,7 +193,7 @@ mod tests {
         }
     }
 
-        #[test]
+    #[test]
     fn test_updates_seconds() {
         let mut rtc = init_rtc();
         // subtract 10 seconds from the access time to fake as if 10 seconds went by
@@ -284,5 +293,70 @@ mod tests {
         rtc.set_days_upper(0xFF);
 
         rtc.test_registers(0xFF, 30, 3, 6, 30);
+    }
+
+    #[test]
+    fn test_halted_stops_getter_update() {
+        let mut rtc = init_rtc();
+        
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+
+        rtc.test_registers(0x40, 0, 0, 0, 0);
+    }
+
+    #[test]
+    fn test_halted_stops_set_seconds_update() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+        rtc.set_seconds(5);
+
+        rtc.test_registers(0x40, 0, 0, 0, 5);
+    }
+
+    #[test]
+    fn test_halted_stops_minutes_update() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+        rtc.set_minutes(5);
+
+        rtc.test_registers(0x40, 0, 0, 5, 0);
+    }
+
+    #[test]
+    fn test_halted_stops_hours_update() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+        rtc.set_hours(5);
+
+        rtc.test_registers(0x40, 0, 5, 0, 0);
+    }
+
+    #[test]
+    fn test_halted_stops_days_lower_update() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+        rtc.set_days_lower(5);
+
+        rtc.test_registers(0x40, 5, 0, 0, 0);
+    }
+
+    #[test]
+    fn test_halted_stops_days_upper_update() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0x40);
+        rtc.last_modified -= Duration::new(CHANGE_ALL_REGISTERS, 0);
+        rtc.set_days_upper(0xBF);
+
+        rtc.test_registers(0xBF, 0, 0, 0, 0);
     }
 }
