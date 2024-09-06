@@ -40,7 +40,6 @@ impl RealTimeClock {
     // NOTE - I'm not completely sure if the way this would handle carry overs in edge cases is the
     // same, so there might be some slight differences in emulation here. For now I don't think
     // this is a big problem though.
-    // TODO - Figure out how a write followed by a latch would work
     pub fn latch(&mut self) {
         if self.halted {
             return;
@@ -148,8 +147,10 @@ impl RealTimeClock {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    // NOTE - I explicitly did not add a test for a write followed by a latch because
+    // I am not sure how this behavior should be handled.
 
+    use std::time::Duration;
     use super::*;
 
     const CHANGE_ALL_REGISTERS: u64 = 86400 * 511 + 11190;
@@ -194,5 +195,45 @@ mod tests {
         rtc.latch();
 
         rtc.test_registers(0x80, 0, 0, 0, 0);
+    }
+    
+    #[test]
+    fn test_seconds_uses_6_bits() {
+        let mut rtc = init_rtc();
+        
+        rtc.set_seconds(0xFF);
+        let result = rtc.get_seconds();
+
+        assert_eq!(result, 0x3F);
+    }
+
+    #[test]
+    fn test_minutes_uses_6_bits() {
+        let mut rtc = init_rtc();
+        
+        rtc.set_minutes(0xFF);
+        let result = rtc.get_minutes();
+
+        assert_eq!(result, 0x3F);
+    }
+
+    #[test]
+    fn test_hours_uses_5_bits() {
+        let mut rtc = init_rtc();
+        
+        rtc.set_hours(0xFF);
+        let result = rtc.get_hours();
+
+        assert_eq!(result, 0x1F);
+    }
+
+    #[test]
+    fn test_days_upper_uses_3_bits() {
+        let mut rtc = init_rtc();
+
+        rtc.set_days_upper(0xFF);
+        let result = rtc.get_days_upper();
+
+        assert_eq!(result, 0xC1);
     }
 }
