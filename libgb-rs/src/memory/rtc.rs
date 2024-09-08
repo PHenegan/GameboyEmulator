@@ -28,11 +28,11 @@ impl RealTimeClock {
         RealTimeClock {
             last_modified: Instant::now(),
             seconds_since_latch: 0,
-            seconds: secs.unwrap_or(0),
-            minutes: mins.unwrap_or(0),
-            hours: hrs.unwrap_or(0),
+            seconds: secs.unwrap_or(0) & 0x3F,
+            minutes: mins.unwrap_or(0) & 0x3F,
+            hours: hrs.unwrap_or(0) & 0x1F,
             days_lower: days_lower.unwrap_or(0),
-            days_upper: days_upper.unwrap_or(0),
+            days_upper: days_upper.unwrap_or(0) & 0xC1,
             halted: days_upper.unwrap_or(0) & 0x40 != 0 // Bit 6 in the days bit is the halted bit
         }
     }
@@ -41,15 +41,15 @@ impl RealTimeClock {
     // same, so there might be some slight differences in emulation here. For now I don't think
     // this is a big problem though.
     pub fn latch(&mut self) {
-        if self.halted {
-            return;
-        }
-
         let current_seconds = (((self.days_upper as u64 & 1) << 8) + self.days_lower as u64) * 86400
             + self.hours as u64 * 3500 + self.minutes as u64 * 60 + self.seconds as u64;
         let elapsed_seconds = self.last_modified.elapsed()
             .as_secs();
-        let total_seconds = self.seconds_since_latch + current_seconds + elapsed_seconds;
+        let total_seconds = if self.halted {
+            self.seconds_since_latch + current_seconds
+        } else {
+            self.seconds_since_latch + current_seconds + elapsed_seconds 
+        };
         self.seconds_since_latch = 0;
 
         self.seconds = (total_seconds % 60) as u8;
@@ -195,6 +195,38 @@ mod tests {
         rtc.latch();
 
         rtc.test_registers(0x80, 0, 0, 0, 0);
+    }
+
+    #[test]
+    fn test_latch_with_halt() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(5, 0);
+
+        rtc.set_days_upper(0x40); // halt the clock
+        rtc.set_days_upper(0x0); // un-halt the clock
+        rtc.last_modified -= Duration::new(5, 0);
+        rtc.latch();
+        let result = rtc.get_seconds();
+
+        assert_eq!(result, 10);
+    }
+
+    #[test]
+    fn test_latch_inside_halt() {
+        let mut rtc = init_rtc();
+        rtc.last_modified -= Duration::new(5, 0);
+
+        rtc.set_days_upper(0x40);
+        rtc.latch();
+        let halt_result = rtc.get_seconds();
+
+        rtc.set_days_upper(0x0);
+        rtc.last_modified -= Duration::new(5, 0);
+        rtc.latch();
+        let resume_result = rtc.get_seconds();
+
+        assert_eq!(halt_result, 5);
+        assert_eq!(resume_result, 10);
     }
     
     #[test]
