@@ -11,6 +11,8 @@ use std::time::Instant;
 /// (in bit 6), and the 9th bit for the day counter (in bit 0).
 pub struct RealTimeClock {
     last_modified: Instant,
+    // keeps track of the seconds elapsed in between a previous latch and a halt, since
+    // `last_modified` would be updated then
     seconds_since_latch: u64,
     seconds: u8,
     minutes: u8,
@@ -43,14 +45,18 @@ impl RealTimeClock {
     pub fn latch(&mut self) {
         let current_seconds = (((self.days_upper as u64 & 1) << 8) + self.days_lower as u64) * 86400
             + self.hours as u64 * 3500 + self.minutes as u64 * 60 + self.seconds as u64;
-        let elapsed_seconds = self.last_modified.elapsed()
-            .as_secs();
+
+        // When the clock is halted (i.e. not counting up), the last_modified field should be
+        // ignored, but `seconds_since_latch` shouldn't because that holds the amount of time
+        // between the previous latch and the point in time when the clock halted.
         let total_seconds = if self.halted {
             self.seconds_since_latch + current_seconds
         } else {
+            let elapsed_seconds = self.last_modified.elapsed()
+                .as_secs();
             self.seconds_since_latch + current_seconds + elapsed_seconds 
         };
-        self.seconds_since_latch = 0;
+        self.seconds_since_latch = 0; // this value needs to be reset each time it is used
 
         self.seconds = (total_seconds % 60) as u8;
         self.minutes = ((total_seconds / 60) % 60) as u8;
