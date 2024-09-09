@@ -16,13 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - run: cd libgb-rs/
     - name: Build library 
-      run: cargo build --verbose
+      run: cd libgb-rs/ && cargo build --verbose
     - name: Run tests for library
-      run: cargo test --verbose
-    - run: cd ../gb-rs/
+      run: cd libgb-rs/ && cargo test --verbose
     - name: Build executable
-      run: cargo build --verbose
+      run: cd gb-rs/ && cargo build --verbose
     - name: Test executable
-      run: cargo test --verbose
+      run: cd gb-rs/ && cargo test --verbose
