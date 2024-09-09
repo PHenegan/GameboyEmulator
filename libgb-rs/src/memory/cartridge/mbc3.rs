@@ -2,6 +2,10 @@ use crate::memory::cartridge::{CartridgeMapper, MemBank, ROM_BANK_SIZE, RomBank}
 use crate::memory::rtc::RealTimeClock;
 use crate::memory::MemoryWriteError;
 
+/// # MBC3
+/// This struct represents an MBC3 (Memory Bank Controller 3) cartridge mapper for a DMG or CGB 
+/// system. It keeps track of additional memory and storage by intercepting write calls
+/// to Read-Only Memory in order to maintain internal indices.
 pub struct MBC3 {
     rom: Vec<RomBank>,
     ram: Vec<MemBank>,
@@ -44,18 +48,22 @@ impl CartridgeMapper for MBC3 {
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
         let address = address as usize;
         match address {
+            // RAM enable region
             0..=0x1FFF => {
                 self.ram_enabled = data == 0xA0;
                 Ok(())
             }
+            // ROM bank region
             0x2000..=0x3FFF => {
                 self.rom_bank = data & 0x7F;
                 Ok(())
             }
+            // RAM bank region
             0x4000..=0x5FFF => {
                 self.ram_bank = data & 0x0F;
                 Ok(())
             }
+            // RTC latching region (see RTC struct for explanation)
             0x6000..=0x7FFF => {
                 if data == 0 {
                     self.latching = true;
@@ -78,6 +86,7 @@ impl CartridgeMapper for MBC3 {
             return Some(0xFF);
         }
 
+        // First 4 banks correspond to RAM, 0x8 -> 0xC correspond to RTC registers
         match self.ram_bank {
             0..=3 => self.ram.get(self.ram_bank as usize)?
                 .get(address as usize)
@@ -95,6 +104,8 @@ impl CartridgeMapper for MBC3 {
         if !self.ram_enabled {
             return Ok(0xFF);
         }
+
+        // First 4 banks correspond to RAM, 0x8 -> 0xC correspond to RTC registers
         match self.ram_bank {
             0..=3 => self.write_ram(address, data),
             8 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_seconds(data)),
