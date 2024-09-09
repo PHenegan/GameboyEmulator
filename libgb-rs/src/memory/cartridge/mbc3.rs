@@ -53,7 +53,7 @@ impl CartridgeMapper for MBC3 {
                 Ok(())
             }
             0x4000..=0x5FFF => {
-                self.ram_bank = data & 0x03;
+                self.ram_bank = data & 0x0F;
                 Ok(())
             }
             0x6000..=0x7FFF => {
@@ -97,7 +97,7 @@ impl CartridgeMapper for MBC3 {
         }
         match self.ram_bank {
             0..=3 => self.write_ram(address, data),
-            8 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_minutes(data)),
+            8 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_seconds(data)),
             9 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_minutes(data)),
             0xA => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_hours(data)),
             0xB => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_days_lower(data)),
@@ -222,13 +222,136 @@ mod tests {
     }
 
     #[test]
-    fn test_read_invalid_address() {
+    fn test_read_ram_rtc() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 4];
+        let rtc = RealTimeClock::new(Some(1), Some(2), Some(3), Some(4), Some(5));
+        let mut mapper = init_mapper(rom, ram, Some(rtc));
+
+        assert!(mapper.write_rom(0x1000, 0xA0).is_ok());
+
+        assert!(mapper.write_rom(0x5000, 8).is_ok());
+        assert_eq!(mapper.read_mem(0x0), Some(1), "Check seconds register");
+        assert!(mapper.write_rom(0x5000, 9).is_ok());
+        assert_eq!(mapper.read_mem(0x0), Some(2), "Check minutes register");
+        assert!(mapper.write_rom(0x5000, 0xA).is_ok());
+        assert_eq!(mapper.read_mem(0x0), Some(3), "Check hours register");
+        assert!(mapper.write_rom(0x5000, 0xB).is_ok());
+        assert_eq!(mapper.read_mem(0x0), Some(4), "Check lower days register");
+        assert!(mapper.write_rom(0x5000, 0xC).is_ok());
+        assert_eq!(mapper.read_mem(0x0), Some(1), "Check upper days register");
+    }
+
+    #[test]
+    fn test_read_ram_invalid_address() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 1];
+        let mut mapper = init_mapper(rom, ram, None);
+
+        let enable_result = mapper.write_rom(0x1000, 0xA0);
+        let result = mapper.read_mem(0x2000);
+
+        assert!(enable_result.is_ok(), "Should be able to enable RAM");
+        assert!(result.is_none(), "Should not read invalid address");
+    }
+
+    #[test]
+    fn test_read_ram_disabled() {
         let rom = vec![[0; ROM_BANK_SIZE]; 2];
         let ram = vec![[0; RAM_BANK_SIZE]; 1];
         let mapper = init_mapper(rom, ram, None);
 
-        let result = mapper.read_mem(0x2000);
+        let result = mapper.read_mem(0x1000);
 
-        assert!(result.is_none(), "Should not read invalid address");
+        assert_eq!(result, Some(0xFF));
+    }
+
+    #[test]
+    fn test_write_ram_bank_0() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let mut ram = vec![[0; RAM_BANK_SIZE]; 1];
+        ram[0][0x123] = 6;
+        let mut mapper = init_mapper(rom, ram, None);
+        
+        let enable_result = mapper.write_rom(0x1234, 0xA0);
+        let write_result = mapper.write_mem(0x0123, 5);
+        let value_written = mapper.read_mem(0x123);
+
+        assert!(enable_result.is_ok());
+        assert_eq!(write_result, Ok(6));
+        assert_eq!(value_written, Some(5));
+    }
+
+    #[test]
+    fn test_write_ram_banks() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 4];
+        let mut mapper = init_mapper(rom, ram, None);
+        
+        assert!(mapper.write_rom(0x0, 0xA0).is_ok());
+
+        for i in 1..4 {
+            assert!(mapper.write_rom(0x4040, i).is_ok(), "Should switch to bank {i}");
+            let write_result = mapper.write_mem(0x42, 0x50);
+            let value_written = mapper.read_mem(0x42);
+
+            assert_eq!(
+                write_result, Ok(0),
+                "Should always overwrite 0 (indicates switching to a new bank)"
+            );
+            assert_eq!(value_written, Some(0x50));
+        }
+    }
+
+    #[test]
+    fn test_write_ram_rtc_banks() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 4];
+        let rtc = RealTimeClock::new(None, None, None, None, Some(0x40));
+        let mut mapper = init_mapper(rom, ram, Some(rtc));
+        
+        assert!(mapper.write_rom(0x0500, 0xA0).is_ok());
+
+        assert!(mapper.write_rom(0x5FFF, 8).is_ok());
+        assert_eq!(mapper.write_mem(0, 5), Ok(0), "Write to seconds register");
+        assert_eq!(mapper.read_mem(0), Some(5), "Check seconds value");
+        assert!(mapper.write_rom(0x50FF, 9).is_ok());
+        assert_eq!(mapper.write_mem(0, 5), Ok(0), "Write to minutes register");
+        assert_eq!(mapper.read_mem(0), Some(5), "Check minutes value");
+        assert!(mapper.write_rom(0x5F0F, 0xA).is_ok());
+        assert_eq!(mapper.write_mem(0, 5), Ok(0), "Write to hours register");
+        assert_eq!(mapper.read_mem(0), Some(5), "Check hours value");
+        assert!(mapper.write_rom(0x5FF0, 0xB).is_ok());
+        assert_eq!(mapper.write_mem(0, 5), Ok(0), "Write to lower day register");
+        assert_eq!(mapper.read_mem(0), Some(5), "Check lower day value");
+        assert!(mapper.write_rom(0x5FF0, 0xC).is_ok());
+        assert_eq!(mapper.write_mem(0, 0x41), Ok(0x40), "Write to upper day register");
+        assert_eq!(mapper.read_mem(0), Some(0x41), "Check upper day value");
+    }
+
+    #[test]
+    fn test_write_ram_disabled() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 1];
+        let mut mapper = init_mapper(rom, ram, None);
+
+        let result = mapper.write_mem(0x420, 42);
+        assert!(mapper.write_rom(0, 0xA0).is_ok());
+        let check_result = mapper.read_mem(0x420);
+
+        assert_eq!(result, Ok(0xFF), "Writing when disabled should do nothing");
+        assert_eq!(check_result, Some(0), "Nothing should be present in write address");
+    }
+
+    #[test]
+    fn test_write_ram_invalid_address() {
+        let rom = vec![[0; ROM_BANK_SIZE]; 2];
+        let ram = vec![[0; RAM_BANK_SIZE]; 1];
+        let mut mapper = init_mapper(rom, ram, None);
+
+        assert!(mapper.write_rom(0x0001, 0xA0).is_ok());
+        let result = mapper.write_mem(0x2000, 42);
+
+        assert!(result.is_err(), "Should not be able to write to an invalid address");
     }
 }
