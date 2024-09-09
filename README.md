@@ -33,16 +33,17 @@ I may also do a Game Boy Advance emulator to learn about more modern ISAs (ARM32
 emulation as well.
 
 # What Works? What's Left?
-**This is an empty repo right now. Nothing works, everything is left. At this point, this list is 
-really just a way for me to itemize the order in which I want to try to do everything.**
-
+**This mostly an empty repo right now. Nothing works, everything is left. At this point, 
+this list is really just a way for me to itemize the order in which I want to try to do 
+everything.**
+- See the GitHub Issues page for more specific details on progress
 - There is a basic skeleton for the CPU registers, as well as the functions needed for memory
   access by the CPU. See the memory/mod.rs file.
 - There is a trait for handling reads/writes to cartridge memory. *It is not necessarily finalized
-  because I haven't added save support or timer support*
-  - Implementations exist for unmapped cartridges, MBC1, and MBC2 cartridges. At the very least,
-    I will get MBC1 -> MBC3 working, and probably MBC5/7 as well (though those are lower priority
-    because they are mostly for GBC games)
+  because I haven't added save support*
+  - Implementations exist for unmapped cartridges, MBC1, MBC2, and MBC3 cartridges. 
+    At some point I may try to implement the others but they are lower priority since I want to
+    target basic functionality first.
   - The constructors currently implemented are filler and will likely be removed or made private.
     This is because I wanted to wait until I have the logic for several controllers implemented
     before making the logic that actually loads ROM and RAM data into them.
@@ -55,8 +56,12 @@ WIP
 # Useful Resources
 
 [This video](https://www.youtube.com/watch?v=HyzD8pNlpwI) which is a great technical dive into
-the Game Boy system as a whole. I'll also include some typed notes I took on this video
-for the purpose of internalizing the system better.
+the Game Boy system as a whole. I also included some typed notes I took on this video
+for the purpose of internalizing the system better. They can be found in the `extra/` folder in this
+repository.
 
 [https://gbdev.io/gb-opcodes//optables/](https://gbdev.io/gb-opcodes//optables/) is a great website
 which has some documentation on the Gameboy's opcodes
+
+[The Pan Docs](https://gbdev.io/pandocs/) Another great resource for technical documentation 
+on various different parts of the Game Boy and Game Boy Color
