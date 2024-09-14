@@ -1,6 +1,6 @@
 use crate::memory::MemoryWriteError;
 
-use super::{RAM_BANK_SIZE, ROM_BANK_SIZE};
+use super::{LoadCartridgeError, SaveError, RAM_BANK_SIZE, ROM_BANK_SIZE};
 
 /// # BankedRom
 /// This is an abstraction (not intended to be exposed publicly) for Game Boy cartridges.
@@ -13,20 +13,40 @@ pub struct BankedRom {
     rom_bank: usize,
     ram: Vec<u8>,
     ram_bank: usize,
+    has_battery: bool, // whether or not the ROM supports saving
     manual_bank_logic: bool // flag for overriding bank 0 behavior
 }
 
 impl BankedRom {
-    pub fn new(rom: Vec<u8>, ram_banks: usize, manual_bank_logic: bool) -> BankedRom {
+    pub fn new(
+        rom_bytes: Vec<u8>, rom_banks: usize,
+        ram_banks: usize,
+        has_battery: bool,
+        manual_bank_logic: bool
+    ) -> Result<BankedRom, LoadCartridgeError> {
         let ram_size = RAM_BANK_SIZE * ram_banks;
-        // TODO - 0 padding needed for the rom
-        BankedRom {
-            rom,
-            rom_bank: 1,
-            ram: vec![0; ram_size],
-            ram_bank: 0,
-            manual_bank_logic
+        let rom_size = ROM_BANK_SIZE * rom_banks;
+
+        if rom_bytes.len() > rom_size {
+            return Err(LoadCartridgeError);
         }
+
+        // the copy method requires the two sides to have the same length, so a mutable slice
+        // is used to copy over the ROM with memcpy
+        let mut rom = vec![0; rom_size];
+        let rom_to_load = &mut rom[0..rom_bytes.len()];
+        rom_to_load.copy_from_slice(&rom_bytes[..]);
+
+        Ok(
+            BankedRom {
+                rom,
+                rom_bank: 1,
+                ram: vec![0; ram_size],
+                ram_bank: 0,
+                has_battery,
+                manual_bank_logic
+            }
+        )
     }
 
     pub fn set_rom_bank(&mut self, bank: usize) {
@@ -68,15 +88,24 @@ impl BankedRom {
     }
 
     // TODO - think about how this would interact with RTC functionality
-    pub fn load_save(&mut self, save_bytes: Vec<u8>) {
-        // TODO - some extra logic needed here
-        self.ram.copy_from_slice(save_bytes.as_slice());
-        todo!();
+    pub fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
+        if !self.has_battery {
+            return Err(SaveError::SavesNotSupported);
+        }
+
+        if save_data.len() > self.ram.len() {
+            return Err(SaveError::SaveFileTooBig);
+        }
+
+        let slice = &mut self.ram[0..save_data.len()];
+        slice.copy_from_slice(save_data.as_slice());
+        
+        Ok(())
     }
 
     // TODO - think about how this would interact with RTC functionality
     pub fn save(&self) -> Vec<u8> {
-        todo!();
+        self.ram.clone()
     }
 }
 
