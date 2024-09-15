@@ -55,6 +55,10 @@ impl BankedRom {
     }
 
     pub fn read_rom(&self, address: u16) -> Option<u8> {
+        if address >= 0x8000 {
+            return None;
+        }
+
         let address = address as usize;
         let offset = address & 0x3FFF; // address inside of the bank (up to 16KB)
         // bank #
@@ -72,6 +76,10 @@ impl BankedRom {
     }
 
     pub fn read_mem(&self, address: u16) -> Option<u8> {
+        if address >= 0x2000 {
+            return None;
+        }
+
         let offset = address as usize & 0x1FFF; // address inside of the bank (up to 8KB)
         let ram_address = (self.ram_bank << 13) | offset;
         self.ram.get(ram_address)
@@ -79,6 +87,10 @@ impl BankedRom {
     }
 
     pub fn write_mem(&mut self, address: u16, value: u8) -> Result<u8, MemoryWriteError> {
+        if address >= 0x2000 {
+            return Err(MemoryWriteError);
+        }
+
         let address = address as usize & 0x1FFF; // address inside of the bank (up to 8KB)
         let ram_address = (self.ram_bank << 13) | address;
         let byte = self.ram.get_mut(ram_address)

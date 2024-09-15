@@ -205,7 +205,7 @@ mod tests {
     fn test_ram_read() {
         let rom = vec![];
         let mut ram = [0; MBC2_MEM_SIZE];
-        ram[0x1FF] = 42;
+        ram[0x1FF] = 0x42;
         let mut mbc2 = init_mapper(rom, ram);
 
         let enable_result = mbc2.write_rom(0x000A, 0x0A);
@@ -213,8 +213,8 @@ mod tests {
         let repeat_result = mbc2.read_mem(0x3FF);
 
         assert!(enable_result.is_ok(), "Should be able to enable RAM");
-        assert_eq!(result, Some(42), "Should be able to read from memory");
-        assert_eq!(repeat_result, Some(42), "Should repeat when reading past max address");
+        assert_eq!(result, Some(2), "Should be able to read from memory");
+        assert_eq!(repeat_result, Some(2), "Should repeat when reading past max address");
     }
 
     #[test]
