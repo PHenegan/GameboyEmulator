@@ -50,7 +50,8 @@ impl BankedRom {
     }
 
     pub fn set_rom_bank(&mut self, bank: usize) {
-        self.rom_bank = bank;
+        let bank_count = self.rom.len() / ROM_BANK_SIZE;
+        self.rom_bank = bank % bank_count;
     }
 
     pub fn read_rom(&self, address: u16) -> Option<u8> {
@@ -65,8 +66,9 @@ impl BankedRom {
             .copied()
     }
 
-    pub fn set_ram_bank(&mut self, bank: usize) {
-        self.ram_bank = bank;
+    pub fn set_mem_bank(&mut self, bank: usize) {
+        let bank_count = self.ram.len() / RAM_BANK_SIZE;
+        self.ram_bank = bank % bank_count;
     }
 
     pub fn read_mem(&self, address: u16) -> Option<u8> {

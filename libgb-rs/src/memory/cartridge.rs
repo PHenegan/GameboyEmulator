@@ -18,7 +18,10 @@ const RAM_BANK_SIZE: usize = 8192;
 pub type RomBank = [u8; ROM_BANK_SIZE];
 pub type MemBank = [u8; RAM_BANK_SIZE];
 
+#[derive(Debug)]
 pub struct LoadCartridgeError;
+
+#[derive(Debug)]
 pub enum SaveError {
     SavesNotSupported,
     SaveFileTooBig,
@@ -30,6 +33,23 @@ pub enum SaveError {
 /// and ROM storage in several slightly different ways.
 #[automock]
 pub trait CartridgeMapper {
+
+    /// Standard Constructor for building a ROM cartridge
+    ///
+    /// Parameters:
+    /// - `rom`: An array containing all of the ROM data in a single array.
+    /// - `rom_banks`: the number of banks which should be created to hold the ROM
+    /// - `ram_banks`: the number of banks which should be created to hold cartridge memory
+    /// - `has_battery`: whether or not the cartridge supports saving data
+    ///
+    /// Returns:
+    ///
+    /// A new cartridge object, or an error if the ROM is larger than what can bet stored in
+    /// the given number of rom banks
+    fn create(
+        rom: Vec<u8>, rom_banks: u8, 
+        ram_banks: u8, has_battery: bool
+    ) -> Result<Self, LoadCartridgeError> where Self : Sized;
 
     /// Get the 8-bit number at the given address on the cartridge ROM
     ///
@@ -70,4 +90,18 @@ pub trait CartridgeMapper {
     /// Returns the value of the byte that was previously in the given location in RAM,
     /// or a MemoryWriteError if the address is not in the valid range
     fn write_mem(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
+
+    /// Load a save file into the cartridge's memory
+    ///
+    /// Parameters:
+    /// - `save_data`: the memory to load, as a vector of bytes
+    ///
+    /// Returns:
+    ///
+    /// () When the function completes successfully, or a SaveError when saving is not supported
+    /// or the save being loaded is too large
+    fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError>;
+
+    /// Dump a cartridge's memory as a vector of bytes.
+    fn save(&self) -> Vec<u8>;
 }

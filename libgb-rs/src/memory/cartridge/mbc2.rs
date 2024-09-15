@@ -1,30 +1,35 @@
 use crate::memory::MemoryWriteError;
 
-use super::{CartridgeMapper, RomBank, ROM_BANK_SIZE};
+use super::{bankedrom::BankedRom, CartridgeMapper, LoadCartridgeError, SaveError, ROM_BANK_SIZE};
 
 pub const MBC2_MEM_SIZE: usize = 512;
 
 pub struct MBC2 {
-    rom: Vec<RomBank>,
+    rom: BankedRom,
     ram: [u8; MBC2_MEM_SIZE],
-    bank: u8,
     ram_enabled: bool,
     has_battery: bool
 }
 
 impl CartridgeMapper for MBC2 {
+    fn create(
+        rom: Vec<u8>, rom_banks: u8,
+        _ram_banks: u8, has_battery:bool
+    ) -> Result<MBC2, LoadCartridgeError> where Self:Sized {
+        let rom = BankedRom::new(rom, rom_banks as usize, 0, false, false)?;
+        let ram = [0; MBC2_MEM_SIZE];
+
+        Ok(
+            MBC2 {
+                rom,
+                ram,
+                ram_enabled: false,
+                has_battery
+            }
+        )
+    }
     fn read_rom(&self, address: u16) -> Option<u8> {
-        let mut address = address as usize;
-        let mut bank = self.bank as usize;
-        if address < ROM_BANK_SIZE {
-            bank = 0;
-        } else {
-            address -= ROM_BANK_SIZE
-        }
-        
-        self.rom.get(bank % self.rom.len())?
-            .get(address)
-            .copied()
+        self.rom.read_rom(address)
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
@@ -39,8 +44,9 @@ impl CartridgeMapper for MBC2 {
         if address & 0x0100 == 0 {
            self.ram_enabled = data == 0x0A; 
         } else {
-            let bank = data & 0x1F;
-            self.bank = if bank != 0 { bank } else { 1 };
+            let mut bank = data & 0x1F;
+            bank = if bank != 0 { bank } else { 1 };
+            self.rom.set_rom_bank(bank as usize);
         }
         Ok(())
     }
@@ -71,20 +77,49 @@ impl CartridgeMapper for MBC2 {
 
         Ok(old_value)
     }
+
+    fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
+        if !self.has_battery {
+            return Err(SaveError::SavesNotSupported);
+        }
+
+        if save_data.len() > MBC2_MEM_SIZE {
+            return Err(SaveError::SaveFileTooBig);
+        }
+
+        // Can't just do a copy because the data needs to be only 4 bits
+        for idx in 0..save_data.len() {
+            self.ram[idx] = save_data[idx] & 0xF;
+        }
+
+        Ok(())
+    }
+
+    fn save(&self) -> Vec<u8> {
+        self.ram.into()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::memory::cartridge::RomBank;
+
     use super::*;
 
     fn init_mapper(rom: Vec<RomBank>, ram: [u8; MBC2_MEM_SIZE]) -> MBC2 {
-        MBC2 {
-            rom,
-            ram,
-            bank: 1,
-            ram_enabled: false,
-            has_battery: false
-        }
+        // I do this conversion because I changed how the ROM is stored and I don't want to change
+        // all of the tests
+        let sequential_rom = rom.concat();
+        let ram = Vec::from(ram);
+
+        let result = MBC2::create(sequential_rom, rom.len() as u8, 0, true);
+        assert!(result.is_ok(), "Should create MBC2 object correctly");
+        let mut cartridge = result.unwrap();
+
+        let save_result = cartridge.load_save(ram);
+        assert!(save_result.is_ok(), "Should load memory successfully");
+
+        cartridge
     }
 
     #[test]
