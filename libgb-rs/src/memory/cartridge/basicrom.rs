@@ -23,7 +23,7 @@ impl RomOnlyCartridge {
         let mut rom = [0; ROM_SIZE];
 
         if rom.len() > ROM_SIZE {
-            return Err(LoadCartridgeError);
+            return Err(LoadCartridgeError::InvalidRomFile);
         }
 
         let slice = &mut rom[0..rom_data.len()];
@@ -70,6 +70,10 @@ impl CartridgeMapper for RomOnlyCartridge {
             },
             None => Err(MemoryWriteError)
         }
+    }
+
+    fn can_save(&self) -> bool {
+        self.has_battery
     }
 
     fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {

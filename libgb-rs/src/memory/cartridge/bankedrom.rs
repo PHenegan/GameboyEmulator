@@ -28,7 +28,7 @@ impl BankedRom {
         let rom_size = ROM_BANK_SIZE * rom_banks;
 
         if rom_bytes.len() > rom_size {
-            return Err(LoadCartridgeError);
+            return Err(LoadCartridgeError::InvalidRomFile);
         }
 
         // the copy method requires the two sides to have the same length, so a mutable slice
@@ -99,6 +99,9 @@ impl BankedRom {
         *byte = value;
 
         Ok(old_value)
+    }
+    pub fn can_save(&self) -> bool {
+        self.has_battery && self.ram.len() > 0
     }
 
     // TODO - think about how this would interact with RTC functionality

@@ -170,6 +170,11 @@ impl CartridgeMapper for MBC1 {
         rom.write_mem(address, data)
     }
 
+    fn can_save(&self) -> bool {
+        self.rom.borrow()
+            .can_save()
+    }
+
     fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
         self.rom.borrow_mut()
             .load_save(save_data)

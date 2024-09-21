@@ -14,7 +14,7 @@ pub struct MBC2 {
 impl MBC2 {
     pub fn new(
         rom: Vec<u8>, rom_banks: u8,
-        _ram_banks: u8, has_battery:bool
+        has_battery:bool
     ) -> Result<MBC2, LoadCartridgeError> where Self:Sized {
         let rom = BankedRom::new(rom, rom_banks as usize, 0, false, false)?;
         let ram = [0; MBC2_MEM_SIZE];
@@ -81,6 +81,10 @@ impl CartridgeMapper for MBC2 {
         Ok(old_value)
     }
 
+    fn can_save(&self) -> bool {
+        self.rom.can_save()
+    }
+
     fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
         if !self.has_battery {
             return Err(SaveError::SavesNotSupported);
@@ -115,7 +119,7 @@ mod tests {
         let sequential_rom = rom.concat();
         let ram = Vec::from(ram);
 
-        let result = MBC2::new(sequential_rom, rom.len() as u8, 0, true);
+        let result = MBC2::new(sequential_rom, rom.len() as u8, true);
         assert!(result.is_ok(), "Should create MBC2 object correctly");
         let mut cartridge = result.unwrap();
 

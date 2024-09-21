@@ -113,6 +113,10 @@ impl CartridgeMapper for MBC3 {
         }
     }
 
+    fn can_save(&self) -> bool {
+        self.rom.can_save()
+    }
+
     fn save(&self) -> Vec<u8> {
         // TODO - figure out RTC stuff
         self.rom.save()

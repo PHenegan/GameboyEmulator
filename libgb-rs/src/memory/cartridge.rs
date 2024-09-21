@@ -19,7 +19,10 @@ pub type RomBank = [u8; ROM_BANK_SIZE];
 pub type MemBank = [u8; RAM_BANK_SIZE];
 
 #[derive(Debug)]
-pub struct LoadCartridgeError;
+pub enum LoadCartridgeError {
+    UnsupportedType,
+    InvalidRomFile
+}
 
 #[derive(Debug)]
 pub enum SaveError {
@@ -72,6 +75,9 @@ pub trait CartridgeMapper {
     /// Returns the value of the byte that was previously in the given location in RAM,
     /// or a MemoryWriteError if the address is not in the valid range
     fn write_mem(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
+
+    /// Returns whether or not this cartridge supports saving
+    fn can_save(&self) -> bool;
 
     /// Load a save file into the cartridge's memory
     ///
