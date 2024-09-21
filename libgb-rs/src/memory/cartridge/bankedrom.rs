@@ -61,7 +61,7 @@ impl BankedRom {
 
         let address = address as usize;
         let offset = address & 0x3FFF; // address inside of the bank (up to 16KB)
-        // bank #
+                                       // bank #
         let tag = if !self.manual_bank_logic && offset == address { 0 } else { self.rom_bank };
 
         let rom_address = (tag << 14) | offset;
@@ -116,7 +116,7 @@ impl BankedRom {
 
         let slice = &mut self.ram[0..save_data.len()];
         slice.copy_from_slice(save_data.as_slice());
-        
+
         Ok(())
     }
 

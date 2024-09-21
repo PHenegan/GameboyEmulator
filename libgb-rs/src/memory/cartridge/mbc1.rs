@@ -1,4 +1,3 @@
-
 use std::cell::RefCell;
 use crate::memory::MemoryWriteError;
 use super::{bankedrom::BankedRom, CartridgeMapper, LoadCartridgeError, SaveError, ROM_BANK_SIZE};
@@ -70,8 +69,6 @@ impl MBC1 {
         )
     }
 
-   /// the given number of rom banks
- 
     /// Set the lower 5 bits of the rom bank value
     fn set_lower_rom_bank(&mut self, data: u8) {
         self.rom_bank = data & 0x1F;
@@ -80,7 +77,7 @@ impl MBC1 {
         if self.rom_bank == 0 {
             self.rom_bank += 1;
         }
-   }
+    }
 
     /// Set the upper 2 bits of the rom bank value, or the ram bank value
     /// depending on the storage mode of the cartridge
@@ -194,7 +191,7 @@ mod tests {
 
     fn init_bank(rom: Vec<RomBank>, ram: Vec<MemBank>) -> MBC1 {
         let sequential_rom = rom.concat();
-        
+
         let result = MBC1::new(sequential_rom, rom.len() as u8, ram.len() as u8, true);
         assert!(result.is_ok(), "Should create ROM successfully");
         let mut cartridge = result.unwrap();
@@ -243,9 +240,9 @@ mod tests {
 
         let write_result = bank.write_mem(0xF0, 40);
         assert!(write_result.is_ok());
-        
+
         assert!(bank.write_rom(0x4000, 0x0).is_ok());
-        
+
         let read_result = bank.read_mem(0xF0);
         assert_eq!(
             read_result, Some(40),
@@ -262,7 +259,7 @@ mod tests {
 
         let read_result = bank.read_mem(42);
         let write_result = bank.write_mem(42, 28);
-        
+
         assert_eq!(read_result, Some(0xFF), "Memory read should return 0xFF when RAM is disabled");
         assert_eq!(write_result, Ok(0), "Writes should be ignored when RAM is disabled");
     }
@@ -293,7 +290,7 @@ mod tests {
 
         assert_eq!(bank_1_result, Some(0x03), "Test initial read");
         assert_eq!(bank_3_result, Some(0x62), "Test read after switching ROM banks");
-        
+
     }
 
     #[test]
@@ -313,7 +310,7 @@ mod tests {
 
         assert!(bank.write_rom(0x4000, 0x1).is_ok(), "Set RAM bank to 1");
         let bank_21_result = bank.read_rom(0x4007);
-        
+
         let first_half_result = bank.read_rom(0x95);
 
         assert_eq!(bank_0_result, Some(0x28), "Checking value after setting bank to 0");
@@ -354,7 +351,7 @@ mod tests {
             bank.write_rom(0x4000, 0x11).is_ok(),
             "Change bank even though there are not enough ROM or RAM banks"
         );
-        
+
         let first_half_result = bank.read_rom(0x4);
         let second_half_reuslt = bank.read_rom(0x4007);
 

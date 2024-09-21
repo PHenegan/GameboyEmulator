@@ -117,7 +117,7 @@ mod tests {
                 let result = RomOnlyCartridge::new(rom.into(), true, has_battery);
                 assert!(result.is_ok(), "Should be able to create ROM");
                 let mut cartridge = result.unwrap();
-                
+
                 let save_result = cartridge.load_save(ram.into());
                 assert!(save_result.is_ok(), "Should be able to load memory");
 

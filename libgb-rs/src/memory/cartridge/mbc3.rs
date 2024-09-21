@@ -166,7 +166,7 @@ mod tests {
 
         let switch_result = mapper.write_rom(0x3000, 0x20);
         let read_result = mapper.read_rom(0x42);
-        
+
         assert!(switch_result.is_ok(), "Should successfully switch banks");
         assert_eq!(read_result, Some(28), "Should read correctly from bank 0");
     }
@@ -293,7 +293,7 @@ mod tests {
         let mut ram = vec![[0; RAM_BANK_SIZE]; 1];
         ram[0][0x123] = 6;
         let mut mapper = init_mapper(rom, ram, None);
-        
+
         let enable_result = mapper.write_rom(0x1234, 0xA0);
         let write_result = mapper.write_mem(0x0123, 5);
         let value_written = mapper.read_mem(0x123);
@@ -308,7 +308,7 @@ mod tests {
         let rom = vec![[0; ROM_BANK_SIZE]; 2];
         let ram = vec![[0; RAM_BANK_SIZE]; 4];
         let mut mapper = init_mapper(rom, ram, None);
-        
+
         assert!(mapper.write_rom(0x0, 0xA0).is_ok());
 
         for i in 1..4 {
@@ -330,7 +330,7 @@ mod tests {
         let ram = vec![[0; RAM_BANK_SIZE]; 4];
         let rtc = RealTimeClock::new(None, None, None, None, Some(0x40));
         let mut mapper = init_mapper(rom, ram, Some(rtc));
-        
+
         assert!(mapper.write_rom(0x0500, 0xA0).is_ok());
 
         assert!(mapper.write_rom(0x5FFF, 8).is_ok());

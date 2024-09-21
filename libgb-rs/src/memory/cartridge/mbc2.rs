@@ -45,7 +45,7 @@ impl CartridgeMapper for MBC2 {
         // look at bit 8 to check whether the rom bank should be changed
         // or the ram should be enabled
         if address & 0x0100 == 0 {
-           self.ram_enabled = data == 0x0A; 
+            self.ram_enabled = data == 0x0A; 
         } else {
             let mut bank = data & 0x1F;
             bank = if bank != 0 { bank } else { 1 };
@@ -137,7 +137,7 @@ mod tests {
         let mbc2 = init_mapper(rom, ram);
 
         let result = mbc2.read_rom(4);
-        
+
         assert_eq!(result, Some(0x28), "Should be able to read from first half");
     }
 
@@ -202,12 +202,12 @@ mod tests {
         let rom = vec![[0; ROM_BANK_SIZE]; 32];
         let ram = [0; MBC2_MEM_SIZE];
         let mut mbc2 = init_mapper(rom, ram);
-        
+
         let result = mbc2.write_rom(0x8000, 0xFE);
 
         assert!(result.is_err(), "Should return error when ROM write address is out of bounds");
     }
-    
+
     #[test]
     fn test_ram_read() {
         let rom = vec![];
@@ -254,13 +254,13 @@ mod tests {
         );
         assert_eq!(written_value, Some(0x08), "Previous call should have changed value in RAM");
     }
-    
+
     #[test]
     fn test_ram_disabled_write() {
         let rom = vec![];
         let ram = [0; MBC2_MEM_SIZE];
         let mut mbc2 = init_mapper(rom, ram);
-        
+
         let result = mbc2.write_mem(0xBE, 0xEF);
 
         assert_eq!(result, Ok(0xFF), "Should ignore writes when memory is disabled");
