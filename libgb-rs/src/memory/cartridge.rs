@@ -6,6 +6,7 @@ mod mbc1;
 mod mbc2;
 mod mbc3;
 mod bankedrom;
+mod builder;
 
 pub use basicrom::RomOnlyCartridge;
 pub use mbc1::MBC1;
