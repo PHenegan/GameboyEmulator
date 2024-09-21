@@ -41,6 +41,37 @@ pub struct MBC1 {
 }
 
 impl MBC1 {
+    /// Constructor for building a basic ROM cartridge
+    ///
+    /// Parameters:
+    /// - `rom`: An array containing all of the ROM data in a single array.
+    /// - `rom_banks`: the number of banks which should be created to hold the ROM
+    /// - `ram_banks`: the number of banks which should be created to hold cartridge memory
+    /// - `has_battery`: whether or not the cartridge supports saving data
+    ///
+    /// Returns:
+    ///
+    /// A new cartridge object, or an error if the ROM is larger than what can bet stored in
+    pub fn new(
+        rom: Vec<u8>, rom_banks: u8,
+        ram_banks: u8, has_battery: bool
+    ) -> Result<Self, LoadCartridgeError> where Self : Sized {
+        let rom = BankedRom::new(rom, rom_banks as usize, ram_banks as usize, has_battery, true)?;
+
+        Ok(
+            MBC1 {
+                rom: RefCell::new(rom),
+                storage_mode: StorageMode::ROM,
+                ram_bank: 0,
+                rom_bank: 1,
+                ram_enabled: false,
+                extra_storage: rom_banks > 32
+            }
+        )
+    }
+
+   /// the given number of rom banks
+ 
     /// Set the lower 5 bits of the rom bank value
     fn set_lower_rom_bank(&mut self, data: u8) {
         self.rom_bank = data & 0x1F;
@@ -69,24 +100,6 @@ impl MBC1 {
 // is a reliable knowing how the hardware on an individual cartridge is wired up for using the
 // extra 2 bit register for RAM vs. ROM
 impl CartridgeMapper for MBC1 {
-    fn create(
-        rom: Vec<u8>, rom_banks: u8,
-        ram_banks: u8, has_battery: bool
-    ) -> Result<Self, LoadCartridgeError> where Self : Sized {
-        let rom = BankedRom::new(rom, rom_banks as usize, ram_banks as usize, has_battery, true)?;
-
-        Ok(
-            MBC1 {
-                rom: RefCell::new(rom),
-                storage_mode: StorageMode::ROM,
-                ram_bank: 0,
-                rom_bank: 1,
-                ram_enabled: false,
-                extra_storage: rom_banks > 32
-            }
-        )
-    }
-
     fn read_rom(&self, address: u16) -> Option<u8> {
         let mut bank = self.rom_bank as usize;
         let first_half = address < (ROM_BANK_SIZE as u16);
@@ -177,7 +190,7 @@ mod tests {
     fn init_bank(rom: Vec<RomBank>, ram: Vec<MemBank>) -> MBC1 {
         let sequential_rom = rom.concat();
         
-        let result = MBC1::create(sequential_rom, rom.len() as u8, ram.len() as u8, true);
+        let result = MBC1::new(sequential_rom, rom.len() as u8, ram.len() as u8, true);
         assert!(result.is_ok(), "Should create ROM successfully");
         let mut cartridge = result.unwrap();
 

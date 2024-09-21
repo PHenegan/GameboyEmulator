@@ -33,24 +33,6 @@ pub enum SaveError {
 /// and ROM storage in several slightly different ways.
 #[automock]
 pub trait CartridgeMapper {
-
-    /// Standard Constructor for building a ROM cartridge
-    ///
-    /// Parameters:
-    /// - `rom`: An array containing all of the ROM data in a single array.
-    /// - `rom_banks`: the number of banks which should be created to hold the ROM
-    /// - `ram_banks`: the number of banks which should be created to hold cartridge memory
-    /// - `has_battery`: whether or not the cartridge supports saving data
-    ///
-    /// Returns:
-    ///
-    /// A new cartridge object, or an error if the ROM is larger than what can bet stored in
-    /// the given number of rom banks
-    fn create(
-        rom: Vec<u8>, rom_banks: u8, 
-        ram_banks: u8, has_battery: bool
-    ) -> Result<Self, LoadCartridgeError> where Self : Sized;
-
     /// Get the 8-bit number at the given address on the cartridge ROM
     ///
     /// Parameters:

@@ -14,12 +14,12 @@ pub struct RomOnlyCartridge {
     has_battery: bool
 }
 
-impl CartridgeMapper for RomOnlyCartridge {
-    fn create(
-        rom_data: Vec<u8>, _rom_banks: u8,
-        ram_banks: u8, has_battery: bool
+impl RomOnlyCartridge {
+    pub fn new(
+        rom_data: Vec<u8>,
+        has_ram: bool, has_battery: bool
     ) -> Result<Self, LoadCartridgeError> where Self : Sized {
-        let ram = if ram_banks > 0 { Some([0; RAM_SIZE]) } else { None };
+        let ram = if has_ram { Some([0; RAM_SIZE]) } else { None };
         let mut rom = [0; ROM_SIZE];
 
         if rom.len() > ROM_SIZE {
@@ -37,7 +37,9 @@ impl CartridgeMapper for RomOnlyCartridge {
             }
         )
     }
+}
 
+impl CartridgeMapper for RomOnlyCartridge {
     fn read_rom(&self, address: u16) -> Option<u8> {
         let address = address as usize;
         self.rom.get(address)
@@ -108,7 +110,7 @@ mod tests {
     ) -> RomOnlyCartridge {
         match ram {
             Some(ram) => {
-                let result = RomOnlyCartridge::create(rom.into(), 2, 1, has_battery);
+                let result = RomOnlyCartridge::new(rom.into(), true, has_battery);
                 assert!(result.is_ok(), "Should be able to create ROM");
                 let mut cartridge = result.unwrap();
                 
@@ -118,7 +120,7 @@ mod tests {
                 cartridge
             },
             None => {
-                let result = RomOnlyCartridge::create(rom.into(), 2, 0, has_battery);
+                let result = RomOnlyCartridge::new(rom.into(), false, has_battery);
                 assert!(result.is_ok(), "Should be able to create ROM");
                 result.unwrap()
             }

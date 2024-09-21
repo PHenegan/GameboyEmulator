@@ -16,14 +16,12 @@ pub struct MBC3 {
     rtc: Option<RealTimeClock>,
     latching: bool,
 }
-
-impl CartridgeMapper for MBC3 {
-    fn create(
+impl MBC3 {
+    pub fn new(
         rom: Vec<u8>, rom_banks: u8,
-        ram_banks: u8, has_battery:bool
+        ram_banks: u8, has_battery: bool, rtc: Option<RealTimeClock>
     ) -> Result<Self, LoadCartridgeError> where Self:Sized {
         let rom = BankedRom::new(rom, rom_banks as usize, ram_banks as usize, has_battery, false)?;
-        let rtc = RealTimeClock::new(None, None, None, None, None);
 
         // TODO - this needs to be reworked because MBC3 cartridges aren't guaranteed to have
         // an RTC
@@ -32,11 +30,14 @@ impl CartridgeMapper for MBC3 {
                 rom,
                 ram_enabled: false,
                 ram_bank: 1,
-                rtc: Some(rtc),
+                rtc,
                 latching: false
             }
         )
     }
+}
+
+impl CartridgeMapper for MBC3 {
     fn read_rom(&self, address: u16) -> Option<u8> {
         self.rom.read_rom(address)
     }
@@ -132,10 +133,9 @@ mod tests {
     fn init_mapper(rom: Vec<RomBank>, ram: Vec<MemBank>, rtc: Option<RealTimeClock>) -> MBC3 {
         let sequential_rom = rom.concat();
 
-        let result = MBC3::create(sequential_rom, rom.len() as u8, ram.len() as u8, true);
+        let result = MBC3::new(sequential_rom, rom.len() as u8, ram.len() as u8, true, rtc);
         assert!(result.is_ok(), "should be able to create ROM");
         let mut cartridge = result.unwrap();
-        cartridge.rtc = rtc;
 
         let save_result = cartridge.load_save(ram.concat());
         assert!(save_result.is_ok(), "should be able to load memory for ROM");
