@@ -5,10 +5,13 @@ mod basicrom;
 mod mbc1;
 mod mbc2;
 mod mbc3;
+mod bankedrom;
+mod builder;
 
 pub use basicrom::RomOnlyCartridge;
 pub use mbc1::MBC1;
 pub use mbc2::MBC2;
+pub use mbc3::MBC3;
 
 const ROM_BANK_SIZE: usize = 16384;
 const RAM_BANK_SIZE: usize = 8192;
@@ -16,14 +19,24 @@ const RAM_BANK_SIZE: usize = 8192;
 pub type RomBank = [u8; ROM_BANK_SIZE];
 pub type MemBank = [u8; RAM_BANK_SIZE];
 
+#[derive(Debug)]
+pub enum LoadCartridgeError {
+    UnsupportedType,
+    InvalidRomFile
+}
+
+#[derive(Debug)]
+pub enum SaveError {
+    SavesNotSupported,
+    SaveFileTooBig,
+}
+
 /// # CartridgeMapper
 /// A Trait representing A Game boy system's cartridge memory mapper. This trait is necessary
 /// to accomodate the different types of Game boy cartridges which allow for increased memory
 /// and ROM storage in several slightly different ways.
 #[automock]
 pub trait CartridgeMapper {
-    // TODO - think about timer, SRAM, etc. support
-
     /// Get the 8-bit number at the given address on the cartridge ROM
     ///
     /// Parameters:
@@ -63,4 +76,21 @@ pub trait CartridgeMapper {
     /// Returns the value of the byte that was previously in the given location in RAM,
     /// or a MemoryWriteError if the address is not in the valid range
     fn write_mem(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
+
+    /// Returns whether or not this cartridge supports saving
+    fn can_save(&self) -> bool;
+
+    /// Load a save file into the cartridge's memory
+    ///
+    /// Parameters:
+    /// - `save_data`: the memory to load, as a vector of bytes
+    ///
+    /// Returns:
+    ///
+    /// () When the function completes successfully, or a SaveError when saving is not supported
+    /// or the save being loaded is too large
+    fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError>;
+
+    /// Dump a cartridge's memory as a vector of bytes.
+    fn save(&self) -> Vec<u8>;
 }

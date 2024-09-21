@@ -1,48 +1,45 @@
-use crate::memory::cartridge::{CartridgeMapper, MemBank, ROM_BANK_SIZE, RomBank};
+use crate::memory::cartridge::CartridgeMapper;
 use crate::memory::rtc::RealTimeClock;
 use crate::memory::MemoryWriteError;
+
+use super::bankedrom::BankedRom;
+use super::LoadCartridgeError;
 
 /// # MBC3
 /// This struct represents an MBC3 (Memory Bank Controller 3) cartridge mapper for a DMG or CGB 
 /// system. It keeps track of additional memory and storage by intercepting write calls
 /// to Read-Only Memory in order to maintain internal indices.
 pub struct MBC3 {
-    rom: Vec<RomBank>,
-    ram: Vec<MemBank>,
-    rom_bank: u8,
-    ram_bank: u8,
+    rom: BankedRom,
     ram_enabled: bool,
+    ram_bank: u8,
     rtc: Option<RealTimeClock>,
     latching: bool,
-    has_battery: bool
 }
-
 impl MBC3 {
-    fn write_ram(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError> {
-        let byte = self.ram.get_mut(self.ram_bank as usize)
-            .ok_or(MemoryWriteError)?
-            .get_mut(address as usize)
-            .ok_or(MemoryWriteError)?;
+    pub fn new(
+        rom: Vec<u8>, rom_banks: u8,
+        ram_banks: u8, has_battery: bool, rtc: Option<RealTimeClock>
+    ) -> Result<Self, LoadCartridgeError> where Self:Sized {
+        let rom = BankedRom::new(rom, rom_banks as usize, ram_banks as usize, has_battery, false)?;
 
-        let old_value = byte.clone();
-        *byte = data;
-
-        Ok(old_value)
+        // TODO - this needs to be reworked because MBC3 cartridges aren't guaranteed to have
+        // an RTC
+        Ok(
+            MBC3 {
+                rom,
+                ram_enabled: false,
+                ram_bank: 1,
+                rtc,
+                latching: false
+            }
+        )
     }
 }
 
 impl CartridgeMapper for MBC3 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        let mut bank = 0;
-        let mut address = address as usize;
-        if address >= ROM_BANK_SIZE {
-            bank = self.rom_bank as usize;
-            address -= ROM_BANK_SIZE;
-        }
-
-        self.rom.get(bank)?
-            .get(address)
-            .copied()
+        self.rom.read_rom(address)
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
@@ -55,12 +52,13 @@ impl CartridgeMapper for MBC3 {
             }
             // ROM bank region
             0x2000..=0x3FFF => {
-                self.rom_bank = data & 0x7F;
+                self.rom.set_rom_bank((data & 0x7F) as usize);
                 Ok(())
             }
             // RAM bank region
             0x4000..=0x5FFF => {
                 self.ram_bank = data & 0x0F;
+                self.rom.set_mem_bank(self.ram_bank as usize);
                 Ok(())
             }
             // RTC latching region (see RTC struct for explanation)
@@ -88,9 +86,7 @@ impl CartridgeMapper for MBC3 {
 
         // First 4 banks correspond to RAM, 0x8 -> 0xC correspond to RTC registers
         match self.ram_bank {
-            0..=3 => self.ram.get(self.ram_bank as usize)?
-                .get(address as usize)
-                .copied(),
+            0..=3 => self.rom.read_mem(address),
             8 => Some(self.rtc.as_ref()?.get_seconds()),
             9 => Some(self.rtc.as_ref()?.get_minutes()),
             0xA => Some(self.rtc.as_ref()?.get_hours()),
@@ -107,7 +103,7 @@ impl CartridgeMapper for MBC3 {
 
         // First 4 banks correspond to RAM, 0x8 -> 0xC correspond to RTC registers
         match self.ram_bank {
-            0..=3 => self.write_ram(address, data),
+            0..=3 => self.rom.write_mem(address, data),
             8 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_seconds(data)),
             9 => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_minutes(data)),
             0xA => Ok(self.rtc.as_mut().ok_or(MemoryWriteError)?.set_hours(data)),
@@ -116,25 +112,39 @@ impl CartridgeMapper for MBC3 {
             _ => Err(MemoryWriteError)
         }
     }
+
+    fn can_save(&self) -> bool {
+        self.rom.can_save()
+    }
+
+    fn save(&self) -> Vec<u8> {
+        // TODO - figure out RTC stuff
+        self.rom.save()
+    }
+
+    fn load_save(&mut self,save_data:Vec<u8>) -> Result<(),super::SaveError> {
+        // TODO - figure out RTC stuff
+        self.rom.load_save(save_data)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::memory::cartridge::RAM_BANK_SIZE;
+    use crate::memory::cartridge::{MemBank, RomBank, RAM_BANK_SIZE, ROM_BANK_SIZE};
 
     use super::*;
 
     fn init_mapper(rom: Vec<RomBank>, ram: Vec<MemBank>, rtc: Option<RealTimeClock>) -> MBC3 {
-        MBC3 {
-            rom,
-            ram,
-            rom_bank: 1,
-            ram_bank: 0,
-            ram_enabled: false,
-            rtc,
-            latching: false,
-            has_battery: false
-        }
+        let sequential_rom = rom.concat();
+
+        let result = MBC3::new(sequential_rom, rom.len() as u8, ram.len() as u8, true, rtc);
+        assert!(result.is_ok(), "should be able to create ROM");
+        let mut cartridge = result.unwrap();
+
+        let save_result = cartridge.load_save(ram.concat());
+        assert!(save_result.is_ok(), "should be able to load memory for ROM");
+
+        cartridge
     }
 
     #[test]
@@ -156,7 +166,7 @@ mod tests {
 
         let switch_result = mapper.write_rom(0x3000, 0x20);
         let read_result = mapper.read_rom(0x42);
-        
+
         assert!(switch_result.is_ok(), "Should successfully switch banks");
         assert_eq!(read_result, Some(28), "Should read correctly from bank 0");
     }
@@ -283,7 +293,7 @@ mod tests {
         let mut ram = vec![[0; RAM_BANK_SIZE]; 1];
         ram[0][0x123] = 6;
         let mut mapper = init_mapper(rom, ram, None);
-        
+
         let enable_result = mapper.write_rom(0x1234, 0xA0);
         let write_result = mapper.write_mem(0x0123, 5);
         let value_written = mapper.read_mem(0x123);
@@ -298,7 +308,7 @@ mod tests {
         let rom = vec![[0; ROM_BANK_SIZE]; 2];
         let ram = vec![[0; RAM_BANK_SIZE]; 4];
         let mut mapper = init_mapper(rom, ram, None);
-        
+
         assert!(mapper.write_rom(0x0, 0xA0).is_ok());
 
         for i in 1..4 {
@@ -320,7 +330,7 @@ mod tests {
         let ram = vec![[0; RAM_BANK_SIZE]; 4];
         let rtc = RealTimeClock::new(None, None, None, None, Some(0x40));
         let mut mapper = init_mapper(rom, ram, Some(rtc));
-        
+
         assert!(mapper.write_rom(0x0500, 0xA0).is_ok());
 
         assert!(mapper.write_rom(0x5FFF, 8).is_ok());

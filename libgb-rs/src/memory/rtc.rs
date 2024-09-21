@@ -22,6 +22,12 @@ pub struct RealTimeClock {
     halted: bool
 }
 
+impl Default for RealTimeClock {
+    fn default() -> Self {
+        Self::new(None, None, None, None, None)
+    }
+}
+
 impl RealTimeClock {
     pub fn new(
         secs: Option<u8>, mins: Option<u8>, hrs: Option<u8>,

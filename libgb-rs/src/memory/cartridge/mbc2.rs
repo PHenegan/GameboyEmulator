@@ -1,30 +1,38 @@
 use crate::memory::MemoryWriteError;
 
-use super::{CartridgeMapper, RomBank, ROM_BANK_SIZE};
+use super::{bankedrom::BankedRom, CartridgeMapper, LoadCartridgeError, SaveError, ROM_BANK_SIZE};
 
 pub const MBC2_MEM_SIZE: usize = 512;
 
 pub struct MBC2 {
-    rom: Vec<RomBank>,
+    rom: BankedRom,
     ram: [u8; MBC2_MEM_SIZE],
-    bank: u8,
     ram_enabled: bool,
     has_battery: bool
 }
 
+impl MBC2 {
+    pub fn new(
+        rom: Vec<u8>, rom_banks: u8,
+        has_battery:bool
+    ) -> Result<MBC2, LoadCartridgeError> where Self:Sized {
+        let rom = BankedRom::new(rom, rom_banks as usize, 0, false, false)?;
+        let ram = [0; MBC2_MEM_SIZE];
+
+        Ok(
+            MBC2 {
+                rom,
+                ram,
+                ram_enabled: false,
+                has_battery
+            }
+        )
+    }
+}
+
 impl CartridgeMapper for MBC2 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        let mut address = address as usize;
-        let mut bank = self.bank as usize;
-        if address < ROM_BANK_SIZE {
-            bank = 0;
-        } else {
-            address -= ROM_BANK_SIZE
-        }
-        
-        self.rom.get(bank % self.rom.len())?
-            .get(address)
-            .copied()
+        self.rom.read_rom(address)
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(), MemoryWriteError> {
@@ -37,10 +45,11 @@ impl CartridgeMapper for MBC2 {
         // look at bit 8 to check whether the rom bank should be changed
         // or the ram should be enabled
         if address & 0x0100 == 0 {
-           self.ram_enabled = data == 0x0A; 
+            self.ram_enabled = data == 0x0A; 
         } else {
-            let bank = data & 0x1F;
-            self.bank = if bank != 0 { bank } else { 1 };
+            let mut bank = data & 0x1F;
+            bank = if bank != 0 { bank } else { 1 };
+            self.rom.set_rom_bank(bank as usize);
         }
         Ok(())
     }
@@ -71,20 +80,53 @@ impl CartridgeMapper for MBC2 {
 
         Ok(old_value)
     }
+
+    fn can_save(&self) -> bool {
+        self.rom.can_save()
+    }
+
+    fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
+        if !self.has_battery {
+            return Err(SaveError::SavesNotSupported);
+        }
+
+        if save_data.len() > MBC2_MEM_SIZE {
+            return Err(SaveError::SaveFileTooBig);
+        }
+
+        // Can't just do a copy because the data needs to be only 4 bits
+        for idx in 0..save_data.len() {
+            self.ram[idx] = save_data[idx] & 0xF;
+        }
+
+        Ok(())
+    }
+
+    fn save(&self) -> Vec<u8> {
+        self.ram.into()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::memory::cartridge::RomBank;
+
     use super::*;
 
     fn init_mapper(rom: Vec<RomBank>, ram: [u8; MBC2_MEM_SIZE]) -> MBC2 {
-        MBC2 {
-            rom,
-            ram,
-            bank: 1,
-            ram_enabled: false,
-            has_battery: false
-        }
+        // I do this conversion because I changed how the ROM is stored and I don't want to change
+        // all of the tests
+        let sequential_rom = rom.concat();
+        let ram = Vec::from(ram);
+
+        let result = MBC2::new(sequential_rom, rom.len() as u8, true);
+        assert!(result.is_ok(), "Should create MBC2 object correctly");
+        let mut cartridge = result.unwrap();
+
+        let save_result = cartridge.load_save(ram);
+        assert!(save_result.is_ok(), "Should load memory successfully");
+
+        cartridge
     }
 
     #[test]
@@ -95,7 +137,7 @@ mod tests {
         let mbc2 = init_mapper(rom, ram);
 
         let result = mbc2.read_rom(4);
-        
+
         assert_eq!(result, Some(0x28), "Should be able to read from first half");
     }
 
@@ -160,17 +202,17 @@ mod tests {
         let rom = vec![[0; ROM_BANK_SIZE]; 32];
         let ram = [0; MBC2_MEM_SIZE];
         let mut mbc2 = init_mapper(rom, ram);
-        
+
         let result = mbc2.write_rom(0x8000, 0xFE);
 
         assert!(result.is_err(), "Should return error when ROM write address is out of bounds");
     }
-    
+
     #[test]
     fn test_ram_read() {
         let rom = vec![];
         let mut ram = [0; MBC2_MEM_SIZE];
-        ram[0x1FF] = 42;
+        ram[0x1FF] = 0x42;
         let mut mbc2 = init_mapper(rom, ram);
 
         let enable_result = mbc2.write_rom(0x000A, 0x0A);
@@ -178,8 +220,8 @@ mod tests {
         let repeat_result = mbc2.read_mem(0x3FF);
 
         assert!(enable_result.is_ok(), "Should be able to enable RAM");
-        assert_eq!(result, Some(42), "Should be able to read from memory");
-        assert_eq!(repeat_result, Some(42), "Should repeat when reading past max address");
+        assert_eq!(result, Some(2), "Should be able to read from memory");
+        assert_eq!(repeat_result, Some(2), "Should repeat when reading past max address");
     }
 
     #[test]
@@ -212,13 +254,13 @@ mod tests {
         );
         assert_eq!(written_value, Some(0x08), "Previous call should have changed value in RAM");
     }
-    
+
     #[test]
     fn test_ram_disabled_write() {
         let rom = vec![];
         let ram = [0; MBC2_MEM_SIZE];
         let mut mbc2 = init_mapper(rom, ram);
-        
+
         let result = mbc2.write_mem(0xBE, 0xEF);
 
         assert_eq!(result, Ok(0xFF), "Should ignore writes when memory is disabled");

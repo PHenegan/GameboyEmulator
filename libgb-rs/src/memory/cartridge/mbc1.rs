@@ -1,6 +1,6 @@
+use std::cell::RefCell;
 use crate::memory::MemoryWriteError;
-
-use super::{CartridgeMapper, MemBank, RomBank, ROM_BANK_SIZE};
+use super::{bankedrom::BankedRom, CartridgeMapper, LoadCartridgeError, SaveError, ROM_BANK_SIZE};
 
 /// # StorageMode
 /// An Enum representing the banking mode of an MBC1 Cartridge. 
@@ -29,28 +29,44 @@ impl From<u8> for StorageMode {
 /// A struct which recreates the MBC1 (Memory Bank Controller 1) cartridge functionality
 /// for a DMG system.
 pub struct MBC1 {
-    rom: Vec<RomBank>,
-    ram: Vec<MemBank>,
+    // uses RefCell to allow mutability (for changing memory/rom banks on read calls)
+    // that is required by MBC1 but not other cartridges
+    rom: RefCell<BankedRom>,
     storage_mode: StorageMode,    
     rom_bank: u8,
     ram_bank: u8,
     ram_enabled: bool,
-    has_battery: bool
+    extra_storage: bool
 }
 
 impl MBC1 {
+    /// Constructor for building a basic ROM cartridge
+    ///
+    /// Parameters:
+    /// - `rom`: An array containing all of the ROM data in a single array.
+    /// - `rom_banks`: the number of banks which should be created to hold the ROM
+    /// - `ram_banks`: the number of banks which should be created to hold cartridge memory
+    /// - `has_battery`: whether or not the cartridge supports saving data
+    ///
+    /// Returns:
+    ///
+    /// A new cartridge object, or an error if the ROM is larger than what can bet stored in
+    pub fn new(
+        rom: Vec<u8>, rom_banks: u8,
+        ram_banks: u8, has_battery: bool
+    ) -> Result<Self, LoadCartridgeError> where Self : Sized {
+        let rom = BankedRom::new(rom, rom_banks as usize, ram_banks as usize, has_battery, true)?;
 
-    // TODO - figure out how I want to take in the fields and convert them into banks
-    pub fn new() -> MBC1 {
-        MBC1 {
-            rom: vec!(),
-            ram: vec!(),
-            storage_mode: StorageMode::ROM,
-            rom_bank: 1,
-            ram_bank: 0,
-            has_battery: false,
-            ram_enabled: false
-        }
+        Ok(
+            MBC1 {
+                rom: RefCell::new(rom),
+                storage_mode: StorageMode::ROM,
+                ram_bank: 0,
+                rom_bank: 1,
+                ram_enabled: false,
+                extra_storage: rom_banks > 32
+            }
+        )
     }
 
     /// Set the lower 5 bits of the rom bank value
@@ -61,7 +77,7 @@ impl MBC1 {
         if self.rom_bank == 0 {
             self.rom_bank += 1;
         }
-   }
+    }
 
     /// Set the upper 2 bits of the rom bank value, or the ram bank value
     /// depending on the storage mode of the cartridge
@@ -70,7 +86,7 @@ impl MBC1 {
     }
 
     fn get_mem_bank(&self) -> usize {
-        if self.ram.len() == 1 || self.storage_mode == StorageMode::ROM {
+        if self.storage_mode == StorageMode::ROM {
             return 0;
         }
         self.ram_bank as usize
@@ -82,34 +98,28 @@ impl MBC1 {
 // extra 2 bit register for RAM vs. ROM
 impl CartridgeMapper for MBC1 {
     fn read_rom(&self, address: u16) -> Option<u8> {
-        let mut address = address as usize;
         let mut bank = self.rom_bank as usize;
-        let first_half = address < ROM_BANK_SIZE;
-        let extra_storage = self.rom.len() > 32;
+        let first_half = address < (ROM_BANK_SIZE as u16);
 
         // The first half is mapped to 0x00, 0x20, 0x40, or 0x60 when there are enough banks
         // and the advanced banking mode is 0
-        if first_half && self.storage_mode == StorageMode::RAM && extra_storage {
+        if first_half && self.storage_mode == StorageMode::RAM && self.extra_storage {
             bank = (self.ram_bank << 5) as usize;
         }
         // the first half is always bank 0 when the advanced banking mode is disabled
         else if first_half {
             bank = 0;
         }
-        else if extra_storage {
+        else if self.extra_storage {
             // account for the offset in the internal index
             bank = (self.ram_bank << 5) as usize | (bank & 0x1F);
-            address -= ROM_BANK_SIZE;
-        }
-        else {
-            address -= ROM_BANK_SIZE;
         }
 
         // TODO - should I be handling the case where a bank is out of bounds or is returning
         // "None" here fine?
-        self.rom.get(bank)?
-            .get(address as usize)
-            .copied()
+        let mut rom = self.rom.borrow_mut();
+        rom.set_rom_bank(bank);
+        rom.read_rom(address)
     }
 
     fn write_rom(&mut self, address: u16, data: u8) -> Result<(),MemoryWriteError> {
@@ -139,43 +149,57 @@ impl CartridgeMapper for MBC1 {
             return Some(0xFF);
         }
         let bank = self.get_mem_bank();
-        match self.ram.get(bank) {
-            Some(&ram_bank) => ram_bank.get(address as usize).copied(),
-            None => Some(0xFF)
-        }
+        let mut rom = self.rom.borrow_mut();
+
+        rom.set_mem_bank(bank);
+        rom.read_mem(address)
     }
 
     fn write_mem(&mut self, address: u16, data: u8) -> Result<u8,MemoryWriteError> {
         if !self.ram_enabled {
             return Ok(0);
         }
+
         let bank = self.get_mem_bank();
-        let byte = self.ram.get_mut(bank)
-            .ok_or(MemoryWriteError)?
-            .get_mut(address as usize)
-            .ok_or(MemoryWriteError)?;
-        let original = byte.clone();
-        *byte = data;
-        Ok(original)
+        let mut rom = self.rom.borrow_mut();
+
+        rom.set_mem_bank(bank);
+        rom.write_mem(address, data)
+    }
+
+    fn can_save(&self) -> bool {
+        self.rom.borrow()
+            .can_save()
+    }
+
+    fn load_save(&mut self, save_data: Vec<u8>) -> Result<(), SaveError> {
+        self.rom.borrow_mut()
+            .load_save(save_data)
+    }
+
+    fn save(&self) -> Vec<u8> {
+        self.rom.borrow()
+            .save()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::memory::cartridge::RAM_BANK_SIZE;
+    use crate::memory::cartridge::{MemBank, RomBank, RAM_BANK_SIZE};
 
     use super::*;
 
     fn init_bank(rom: Vec<RomBank>, ram: Vec<MemBank>) -> MBC1 {
-        MBC1 {
-            rom,
-            ram,
-            storage_mode: StorageMode::ROM,
-            rom_bank: 1,
-            ram_bank: 0,
-            has_battery: false,
-            ram_enabled: false,
-        }
+        let sequential_rom = rom.concat();
+
+        let result = MBC1::new(sequential_rom, rom.len() as u8, ram.len() as u8, true);
+        assert!(result.is_ok(), "Should create ROM successfully");
+        let mut cartridge = result.unwrap();
+
+        let save_result = cartridge.load_save(ram.concat());
+        assert!(save_result.is_ok(), "Should load ROM memory");
+
+        cartridge
     }
 
     #[test]
@@ -216,9 +240,9 @@ mod tests {
 
         let write_result = bank.write_mem(0xF0, 40);
         assert!(write_result.is_ok());
-        
+
         assert!(bank.write_rom(0x4000, 0x0).is_ok());
-        
+
         let read_result = bank.read_mem(0xF0);
         assert_eq!(
             read_result, Some(40),
@@ -235,7 +259,7 @@ mod tests {
 
         let read_result = bank.read_mem(42);
         let write_result = bank.write_mem(42, 28);
-        
+
         assert_eq!(read_result, Some(0xFF), "Memory read should return 0xFF when RAM is disabled");
         assert_eq!(write_result, Ok(0), "Writes should be ignored when RAM is disabled");
     }
@@ -266,7 +290,7 @@ mod tests {
 
         assert_eq!(bank_1_result, Some(0x03), "Test initial read");
         assert_eq!(bank_3_result, Some(0x62), "Test read after switching ROM banks");
-        
+
     }
 
     #[test]
@@ -286,7 +310,7 @@ mod tests {
 
         assert!(bank.write_rom(0x4000, 0x1).is_ok(), "Set RAM bank to 1");
         let bank_21_result = bank.read_rom(0x4007);
-        
+
         let first_half_result = bank.read_rom(0x95);
 
         assert_eq!(bank_0_result, Some(0x28), "Checking value after setting bank to 0");
@@ -327,7 +351,7 @@ mod tests {
             bank.write_rom(0x4000, 0x11).is_ok(),
             "Change bank even though there are not enough ROM or RAM banks"
         );
-        
+
         let first_half_result = bank.read_rom(0x4);
         let second_half_reuslt = bank.read_rom(0x4007);
 
