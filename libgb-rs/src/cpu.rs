@@ -5,13 +5,13 @@ use crate::utils::{Merge, Split};
 #[derive(Debug, Clone, Copy)]
 pub enum CpuRegister {
     A = 0,
-    B = 1,
-    C = 2, 
-    D = 3,
-    E = 4,
-    H = 5,
-    L = 6,
-    F = 7
+    F = 1,
+    B = 2,
+    C = 3, 
+    D = 4,
+    E = 5,
+    H = 6,
+    L = 7
 }
 
 /// #FlagRegister
@@ -46,6 +46,7 @@ impl From<u8> for FlagRegister {
 
 /// # CpuData
 /// The CPU Registers of a Gameboy/Gameboy Color system
+#[derive(Debug)]
 pub struct CpuData {
     // 7 8-bit registers A-L, followed by the last flag register F 
     registers: Vec<u8>, 
