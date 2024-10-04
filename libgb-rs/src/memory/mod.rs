@@ -37,7 +37,7 @@ pub trait MemoryController {
     /// if the address is invalid.
     fn store_byte(&mut self, address: u16, data: u8) -> Result<u8, MemoryWriteError>;
 
-    /// Save a 16-bit number into the given location in memory
+    /// Save a 16-bit number into the given location in memory, in Little Endian order
     ///
     /// `address`: the location in memory to save to
     /// `data`: the 16-bit number being saved into memory
@@ -104,8 +104,8 @@ impl MemoryController for DmgMemoryController {
     }
 
     fn load_half_word(&self, address: u16) -> Option<u16> {
-        let left = self.load_byte(address)?;
-        let right = self.load_byte(address + 1)?;
+        let right = self.load_byte(address)?;
+        let left = self.load_byte(address + 1)?;
 
         Some(left.merge(right))
     }
@@ -144,10 +144,10 @@ impl MemoryController for DmgMemoryController {
     fn store_half_word(&mut self, address: u16, data: u16) -> Result<(), MemoryWriteError> {
         let (left_data, right_data) = data.split();
 
-        let prev_left = self.store_byte(address, left_data)?;
-        let right = self.store_byte(address + 1, right_data);
-        if right.is_err() {
-            self.store_byte(address, prev_left).unwrap();
+        let prev_right = self.store_byte(address, right_data)?;
+        let left = self.store_byte(address + 1, left_data);
+        if left.is_err() {
+            self.store_byte(address, prev_right).unwrap();
             return Err(MemoryWriteError);
         }
         Ok(())
@@ -271,8 +271,8 @@ mod tests {
     fn test_load_half_word_valid_address() {
         let mock = MockCartridgeMapper::new();
         let mut controller = DmgMemoryController::new(Box::new(mock));
-        controller.store_byte(DMG_RAM_START, 0x04).unwrap();
-        controller.store_byte(DMG_RAM_START + 1, 0x28).unwrap();
+        controller.store_byte(DMG_RAM_START, 0x28).unwrap();
+        controller.store_byte(DMG_RAM_START + 1, 0x04).unwrap();
 
         let result = controller.load_half_word(DMG_RAM_START);
 
@@ -313,15 +313,15 @@ mod tests {
         let result = controller.store_half_word(DMG_RAM_START, 0x0428);
 
         assert_eq!(result, Ok(()), "Test storing 2 bytes into a valid address");
-        assert_eq!(controller.load_byte(DMG_RAM_START), Some(0x04), "Test first loaded byte");
-        assert_eq!(controller.load_byte(DMG_RAM_START + 1), Some(0x28), "Test second loaded byte");
+        assert_eq!(controller.load_byte(DMG_RAM_START), Some(0x28), "Test first loaded byte");
+        assert_eq!(controller.load_byte(DMG_RAM_START + 1), Some(0x04), "Test second loaded byte");
     }
 
     #[test]
-    fn test_store_half_byte_invalid_first_byte() {
+    fn test_store_half_word_invalid_first_byte() {
         let mut mock = MockCartridgeMapper::new();
         mock.expect_write_rom()
-            .with(eq(DMG_ROM_END), eq(0x08))
+            .with(eq(DMG_ROM_END), eq(0x12))
             .return_const(Err(MemoryWriteError));
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
@@ -335,10 +335,10 @@ mod tests {
     }
 
     #[test]
-    fn test_store_half_byte_invalid_second_byte() {
+    fn test_store_half_word_invalid_second_byte() {
         let mut mock = MockCartridgeMapper::new();
         mock.expect_write_mem()
-            .with(eq(0), eq(0x06))
+            .with(eq(0), eq(0x01))
             .return_const(Err(MemoryWriteError));
         let mut controller = DmgMemoryController::new(Box::new(mock));
 
