@@ -72,6 +72,7 @@ impl GameBoySystem {
         // use a 4-bit opcode for these instructions
         let opcode = instruction & 0x0F;
 
+
         todo!();
     }
 
