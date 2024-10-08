@@ -1,5 +1,7 @@
 pub mod cpu;
 pub mod memory;
+pub mod system;
+pub mod instructions;
 mod utils;
 
 pub fn add(left: usize, right: usize) -> usize {

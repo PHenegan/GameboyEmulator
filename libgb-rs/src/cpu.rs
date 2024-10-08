@@ -1,3 +1,5 @@
+use std::mem::transmute;
+
 use crate::utils::{Merge, Split};
 
 /// # CpuRegister
@@ -12,6 +14,15 @@ pub enum CpuRegister {
     E = 5,
     H = 6,
     L = 7
+}
+
+impl From<u8> for CpuRegister {
+    fn from(value: u8) -> Self {
+        // this is safe because it restricts the integer into only valid values
+        // for the register
+        let value = value & 0x7;
+        unsafe { transmute(value) }
+    }
 }
 
 /// #FlagRegister
