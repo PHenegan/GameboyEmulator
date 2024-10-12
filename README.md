@@ -37,6 +37,7 @@ emulation as well.
 this list is really just a way for me to itemize the order in which I want to try to do 
 everything.**
 - See the GitHub Issues page for more specific details on progress
+- 
 - There is a basic skeleton for the CPU registers, as well as the functions needed for memory
   access by the CPU. See the memory/mod.rs file.
 - There is a trait for handling reads/writes to cartridge memory. *It is not necessarily finalized
@@ -50,8 +51,26 @@ everything.**
 - I have some idea from watching a technical video, but I'm unclear on where the PPU fits into
   the program's structure. I'll likely do more research into that as well
 
+# Future Improvements (i.e. What I Want to Rewrite)
+- Rewrite the MBC abstraction - I don't really like it right now. I tried to use composition
+  in place of what would have been an abstract class. This was a bad idea, and I'm pretty sure
+  doing it with an unexposed Trait, and then provide an implementation of the CartridgeMapper trait
+  for anything that has that private trait
+- **Bigger change** - Rewrite the memory write logic to use pointers. While implementing the CPU
+  instructions, I'm noticing a few redundancies with the way I'm writing to memory addresses.
+  When I was working on the instruction logic I realized that writing to registers is not as simple
+  as I thought it would be - namely, one of the indices in a "load to/from a register" command
+  will instead load to/from memory. I currently am handling this with wrapper getter/setter
+  functions, but I think this is kind of a hacky way of doing this.
+
 # Building and Running
-WIP
+There aren't any executables currently. 
+
+However, you can build the `libgb-rs` crate by navigating into the
+`libgb-rs/` folder. From there, you can run the tests by running `cargo test` or build the library
+ith `cargo build`
+
+the `gb-rs` crate is empty, so building/testing that doesn't make much sense at the moment.
 
 # Useful Resources
 
