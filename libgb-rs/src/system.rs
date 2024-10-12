@@ -278,6 +278,7 @@ impl GameBoySystem {
             return self.load_block_3_cond(instruction)
         }
 
+        // I kind of hate this but it's fine :upside_down:
         match instruction {
             0xC9 => Ok(Instruction { op: Operation::Return(false), cycles: 4 }),
             0xD9 => Ok(Instruction { op: Operation::Return(true), cycles: 4 }),
@@ -291,7 +292,64 @@ impl GameBoySystem {
                 }
             ),
             0xCD => Ok(Instruction { op: Operation::Call(self.fetch_imm16()?), cycles: 6 }),
-            // 0xE2 => Ok(Instruction { op: Operation::Load8()}),
+            0xE0 => Ok(Instruction {
+                op: Operation::Store8(
+                    0xFF00 + (self.fetch_byte()? as u16),
+                    self.registers.get_register(CpuRegister::A)
+                ),
+                cycles: 3
+            }),
+            0xE2 => Ok(Instruction { 
+                op: Operation::Store8(
+                    0xFF00 + (self.registers.get_register(CpuRegister::C) as u16),
+                    self.registers.get_register(CpuRegister::A)
+                ),
+                cycles: 2
+            }),
+            0xEA => Ok(Instruction {
+                op: Operation::Store8(
+                    self.fetch_imm16()?,
+                    self.registers.get_register(CpuRegister::A)
+                ),
+                cycles: 4
+            }),
+            0xF0 => {
+                let byte = self.fetch_byte()?;
+                let mem_value = self.memory.load_byte(0xFF00 + (byte as u16))
+                    .ok_or(LoadInstructionError)?;
+                Ok(Instruction { op: Operation::Load8(0, mem_value), cycles: 3 })
+            },
+            0xF2 => {
+                let byte = self.registers.get_register(CpuRegister::C);
+                let mem_value = self.memory.load_byte(0xFF00 + (byte as u16))
+                    .ok_or(LoadInstructionError)?;
+                Ok(Instruction { op: Operation::Load8(0, mem_value), cycles: 3 })
+            }
+            0xFA => {
+                let addr = self.fetch_imm16()?;
+                let mem_val = self.memory.load_byte(addr)
+                    .ok_or(LoadInstructionError)?;
+                Ok(Instruction { op: Operation::Load8(0, mem_val), cycles: 4 }) }
+            0xE8 => Ok(Instruction { 
+                op: Operation::AddStackPointer(self.fetch_byte()? as i8),
+                cycles: 4
+            }),
+            0xF8 => {
+                let imm8 = self.fetch_byte()? as i8;
+                let new_val = self.registers.sp.overflowing_add(imm8 as u16).0;
+                Ok(Instruction { 
+                    op: Operation::Load16(2, new_val),
+                    cycles: 3
+                })
+            },
+            0xF9 => Ok(Instruction { 
+                op: Operation::SetStackPointer(
+                    self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
+                ),
+                cycles: 2
+            }),
+            0xF3 => Ok(Instruction { op: Operation::DisableInterrupts, cycles: 1 }),
+            0xFB => Ok(Instruction { op: Operation::EnableInterrupts, cycles: 1 }),
             _ => Err(LoadInstructionError)
         }
     }

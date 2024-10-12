@@ -36,6 +36,8 @@ pub enum Operation {
     SetBit(u8, u8), // Set the target bit in the target register to 1 (reg, bit)
     PopStack(u8), // Pop the last 2 bytes of the stack into the given 16-bit register
     PushStack(u8), // Push the value in the given 16-bit register onto the stack
+    AddStackPointer(i8), // Add the given signed integer to the register in the stack
+    SetStackPointer(u16), // Set the stack pointer to a specific value
     EnableInterrupts,
     DisableInterrupts,
     Stop,
@@ -47,8 +49,3 @@ pub struct Instruction {
     pub op: Operation
 }
 
-// Some extra opcode notes about block 0
-// - If last 3 bits in range 4 <= x < 7, then it's a 3-bit opcode (with 8-bit registers)
-//   otherwise, it's a 4-bit opcode
-// - If the last 3 bits are 7 then it's an ALU operation on A
-// - If the last 3 bits are 0 it's either jump, jump with cond, or stop
