@@ -2,6 +2,9 @@ use std::mem::transmute;
 
 use crate::utils::{Merge, Split};
 
+// TODO: Restructure this into a folder with submodules like "decode"
+// and use the instruction file as a submodule
+
 /// # CpuRegister
 /// An enum storing each of the lettered registers in a Game Boy CPU.
 #[derive(Debug, Clone, Copy)]
