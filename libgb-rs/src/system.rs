@@ -22,6 +22,50 @@ impl GameBoySystem {
         Ok(left.merge(right))
     }
 
+    fn get_r8(&self, reg: u8) -> Result<u8, LoadInstructionError> {
+        if reg == 6 {
+            return self.memory.load_byte(
+                self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
+            ).ok_or(LoadInstructionError);
+        }
+
+        Ok(self.registers.get_register(reg.into()))
+    }
+
+    fn set_r8(&mut self, reg: u8, value: u8) -> Result<(), MemoryWriteError> {
+        if reg == 6 {
+            self.memory.store_byte(
+                self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L),
+                value
+            )?;
+            return Ok(());
+        }
+
+        Ok(self.registers.set_register(reg.into(), value))
+    }
+
+    fn get_r16_mem(&mut self, register: u8) -> Result<u16, LoadInstructionError> {
+        Ok(match register {
+            0 => self.registers.get_joined_registers(CpuRegister::B, CpuRegister::C),
+            1 => self.registers.get_joined_registers(CpuRegister::D, CpuRegister::E),
+            2 => {
+                let value = self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L);
+                self.registers.set_joined_registers(
+                    CpuRegister::H, CpuRegister::L, value.overflowing_add(1).0
+                );
+                value
+            },
+            3 => {
+                let value = self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L);
+                self.registers.set_joined_registers(
+                    CpuRegister::H, CpuRegister::L, value.overflowing_sub(1).0
+                );
+                value
+            },
+            _ => panic!("Invalid r16mem address - value greater than 4 passed in")
+        })
+    }
+
     pub fn load_instruction(&mut self) -> Result<Instruction, LoadInstructionError>{
         let instruction = self.fetch_byte()?;
         let block = (instruction & 0xC0) >> 6;
@@ -171,28 +215,6 @@ impl GameBoySystem {
         Ok(result)
     }
 
-    fn get_r16_mem(&mut self, register: u8) -> Result<u16, LoadInstructionError> {
-        Ok(match register {
-            0 => self.registers.get_joined_registers(CpuRegister::B, CpuRegister::C),
-            1 => self.registers.get_joined_registers(CpuRegister::D, CpuRegister::E),
-            2 => {
-                let value = self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L);
-                self.registers.set_joined_registers(
-                    CpuRegister::H, CpuRegister::L, value.overflowing_add(1).0
-                );
-                value
-            },
-            3 => {
-                let value = self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L);
-                self.registers.set_joined_registers(
-                    CpuRegister::H, CpuRegister::L, value.overflowing_sub(1).0
-                );
-                value
-            },
-            _ => panic!("Invalid r16mem address - value greater than 4 passed in")
-        })
-    }
-
     fn load_block_1(&mut self, instruction: u8) -> Result<Instruction, LoadInstructionError> {
         assert!(instruction & 0xC0 == 0x40, "Should not be able to call when block is not 1");
 
@@ -207,28 +229,6 @@ impl GameBoySystem {
             op: Operation::Load8(dest_reg, self.get_r8(src_reg)?),
             cycles: 2
         })
-    }
-
-    fn get_r8(&self, reg: u8) -> Result<u8, LoadInstructionError> {
-        if reg == 6 {
-            return self.memory.load_byte(
-                self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
-            ).ok_or(LoadInstructionError);
-        }
-
-        Ok(self.registers.get_register(reg.into()))
-    }
-
-    fn set_r8(&mut self, reg: u8, value: u8) -> Result<(), MemoryWriteError> {
-        if reg == 6 {
-            self.memory.store_byte(
-                self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L),
-                value
-            )?;
-            return Ok(());
-        }
-
-        Ok(self.registers.set_register(reg.into(), value))
     }
 
     fn load_block_2(&self, instruction: u8) -> Result<Instruction, LoadInstructionError> {
