@@ -1,5 +1,8 @@
 use std::mem::transmute;
 
+pub mod decode;
+pub mod instructions;
+
 use crate::utils::{Merge, Split};
 
 // TODO: Restructure this into a folder with submodules like "decode"
