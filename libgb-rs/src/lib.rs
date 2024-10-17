@@ -30,9 +30,10 @@ impl GameBoySystem {
     }
 
     fn fetch_imm16(&mut self) -> Result<u16, GameBoySystemError> {
-        let right = self.fetch_byte()?;
-        let left = self.fetch_byte()?;
-        Ok(left.merge(right))
+        let half_word = self.memory.load_half_word(self.registers.pc)
+            .ok_or(GameBoySystemError::MemoryReadError(self.registers.pc))?;
+        self.registers.pc += 2;
+        Ok(half_word)
     }
 
     fn get_r8(&self, reg: u8) -> Result<u8, GameBoySystemError> {
