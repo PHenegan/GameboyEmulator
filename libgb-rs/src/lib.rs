@@ -3,7 +3,6 @@ pub mod memory;
 
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
-use utils::Merge;
 
 mod utils;
 
@@ -21,6 +20,13 @@ pub struct GameBoySystem {
 }
 
 impl GameBoySystem {
+    pub fn new(memory: Box<dyn MemoryController>) -> Self {
+        Self {
+            registers: CpuData::new(),
+            memory
+        }
+    }
+
     fn fetch_byte(&mut self) -> Result<u8, GameBoySystemError> {
         let byte = self.memory.load_byte(self.registers.pc)
             .ok_or(GameBoySystemError::MemoryReadError(self.registers.pc))?;

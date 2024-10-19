@@ -393,3 +393,38 @@ impl GameBoySystem {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use rand::random;
+
+    use crate::GameBoySystem;
+    use crate::memory::MockMemoryController;
+
+    #[test]
+    fn fuzz_test_instructions() {
+        // Arrange
+        let mut mem = MockMemoryController::new();
+
+        mem.expect_load_byte()
+            .returning(|_| {
+                // According to Pan Docs, these should be the only invalid instructions
+                let invalid_instructions: Vec<u8> = vec![
+                    0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD
+                ];
+
+                let mut rand: u8 = random();
+                while invalid_instructions.contains(&rand) { rand = random(); }
+                Some(rand)
+            });
+
+        let mut dmg: GameBoySystem = GameBoySystem::new(Box::new(mem));
+        
+        // technically this is not guaranteed to test everything but realistically it should
+        for _ in 0..10_000 {
+            let result = dmg.load_instruction();
+            assert!(result.is_ok(), "");
+        }
+
+        todo!();
+    }
+}
