@@ -426,7 +426,9 @@ mod tests {
         // technically this is not guaranteed to test everything but realistically it should
         for _ in 0..10_000 {
             let result = dmg.load_instruction();
-            assert!(result.is_ok(), "");
+            let prefix_result = dmg.load_prefixed();
+            assert!(result.is_ok(), "Should not crash for any instruction");
+            assert!(prefix_result.is_ok(), "Should not crash for any prefixed instruction");
         }
     }
 }
