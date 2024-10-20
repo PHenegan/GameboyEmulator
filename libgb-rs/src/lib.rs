@@ -9,7 +9,7 @@ mod utils;
 #[derive(Debug)]
 pub enum GameBoySystemError {
     MemoryReadError(u16), // the address at which a read was attempted
-    MemoryWriteError(u16, u8), // The address at which a write was attempted, and the write value
+    MemoryWriteError(u16, u16), // The address at which a write was attempted, and the write value
     InvalidInstructionError(u8) // The invalid binary instruction
 }
 
@@ -56,7 +56,7 @@ impl GameBoySystem {
         if reg == 6 {
             let address = self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L);
             self.memory.store_byte(address, value)
-                .map_err(|_err| GameBoySystemError::MemoryWriteError(address, value))?;
+                .map_err(|_err| GameBoySystemError::MemoryWriteError(address, value as u16))?;
             return Ok(());
         }
 

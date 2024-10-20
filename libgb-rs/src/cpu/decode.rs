@@ -43,7 +43,7 @@ impl GameBoySystem {
             1 => self.load_block_1(instruction),
             2 => self.load_block_2(instruction),
             3 => self.load_block_3(instruction),
-            _ => panic!("logic error while extracting block from instruction {instruction}")
+            _ => panic!("logic error while extracting block from instruction {instruction:#X}")
         }
     }
 
@@ -75,7 +75,7 @@ impl GameBoySystem {
                 4 => Operation::Increment8(reg),
                 5 => Operation::Decrement8(reg),
                 6 => Operation::Load8(reg, self.fetch_byte()?),
-                _ => panic!("Invalid block 0 fn3 code for instruction {instruction}")
+                _ => panic!("Invalid block 0 fn3 code for instruction {instruction:#X}")
             }
         };
 
@@ -119,6 +119,7 @@ impl GameBoySystem {
         // use a 4-bit opcode for these instructions
         let fn4 = instruction & 0x0F;
         let register = (instruction & 0x18) >> 3;
+        // NOTE - ordering is grouped based on the instruction, not a numeric ordering of fn4 codes
         let (op, cycles) = match fn4 {
             1 => (Operation::Load16(register, self.fetch_imm16()?), 3),
             2 => (
@@ -127,7 +128,7 @@ impl GameBoySystem {
                     self.registers.get_register(CpuRegister::A)
                 ), 2
             ),
-            6 => {
+            0xA => {
                 let address = self.get_r16_mem(register);
                 (
                     Operation::Load8(
@@ -137,7 +138,10 @@ impl GameBoySystem {
                     ), 2
                 )
             },
-            7 => (Operation::Store16(self.fetch_imm16()?, self.registers.sp), 5),
+            8 => (Operation::Store16(self.fetch_imm16()?, self.registers.sp), 5),
+            3 => (Operation::Increment16(register), 2),
+            0xB => (Operation::Decrement16(register), 2),
+            9 => (Operation::Add16(self.get_r16(register)), 2),
             _ => panic!("Invalid block 0 function 4 in instruction {instruction}")
         };
 
@@ -157,7 +161,7 @@ impl GameBoySystem {
                 0x2F => Operation::Complement,
                 0x37 => Operation::SetCarryFlag,
                 0x3F => Operation::ComplementCarryFlag,
-                _ => panic!("Invalid Block 0 ALU instruction {instruction}")
+                _ => panic!("Invalid Block 0 ALU instruction {instruction:#X}")
             }
         }
     }
@@ -317,7 +321,7 @@ impl GameBoySystem {
             5 => Operation::Xor8(imm8),
             6 => Operation::Or8(imm8),
             7 => Operation::Compare8(imm8),
-            x => panic!("Found invalid function 3 code {x} in instruction {instruction}")
+            x => panic!("Found invalid function 3 code {x} in instruction {instruction:#X}")
         };
 
         Ok(Instruction { op, cycles: 2 })
@@ -328,7 +332,7 @@ impl GameBoySystem {
         match instruction & 0xF {
             1 => Instruction { op: Operation::PopStack(r16stk), cycles: 3 },
             5 => Instruction { op: Operation::PushStack(r16stk), cycles: 3 },
-            _ => panic!("Invalid instruction {instruction} passed to load stack")
+            _ => panic!("Invalid instruction {instruction:#X} passed to load stack")
         }
     }
 
@@ -343,7 +347,7 @@ impl GameBoySystem {
                     0 => 2,
                     2 => 3,
                     4 => 3,
-                    _ => panic!("Invalid instruction {instruction} passed to block 3 cond")
+                    _ => panic!("Invalid instruction {instruction:#X} passed to block 3 cond")
                 }
             });
         }
@@ -351,8 +355,8 @@ impl GameBoySystem {
         match fn3 {
             0 => Ok(Instruction { op: Operation::Return(false), cycles: 5 }),
             2 => Ok(Instruction { op: Operation::Jump(self.fetch_imm16()?), cycles: 4 }),
-            3 => Ok(Instruction { op: Operation::Call(self.fetch_imm16()?), cycles: 6 }),
-            _ => panic!("Invalid instruction {instruction} passed to block 3 cond")
+            4 => Ok(Instruction { op: Operation::Call(self.fetch_imm16()?), cycles: 6 }),
+            _ => panic!("Invalid instruction {instruction:#X} passed to block 3 cond")
         }
     }
 
@@ -373,7 +377,7 @@ impl GameBoySystem {
             1 => Ok(Instruction { op: Operation::TestBit(register, index), cycles }),
             2 => Ok(Instruction { op: Operation::ResetBit(register, index), cycles }),
             3 => Ok(Instruction { op: Operation::SetBit(register, index), cycles }),
-            x => panic!("Found invalid prefixed function 2 code {x} in instruction {instruction}")
+            x => panic!("Found invalid prefixed fn2 code {x} in instruction {instruction:#X}")
         }
     }
 
@@ -402,9 +406,9 @@ mod tests {
 
     #[test]
     fn fuzz_test_instructions() {
-        // Arrange
         let mut mem = MockMemoryController::new();
-
+        mem.expect_load_half_word()
+            .return_const(0xFFFF);
         mem.expect_load_byte()
             .returning(|_| {
                 // According to Pan Docs, these should be the only invalid instructions
@@ -424,7 +428,6 @@ mod tests {
             let result = dmg.load_instruction();
             assert!(result.is_ok(), "");
         }
-
-        todo!();
     }
 }
+
