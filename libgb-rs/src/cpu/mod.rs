@@ -1,4 +1,12 @@
+use std::mem::transmute;
+
+pub mod decode;
+pub mod instructions;
+
 use crate::utils::{Merge, Split};
+
+// TODO: Restructure this into a folder with submodules like "decode"
+// and use the instruction file as a submodule
 
 /// # CpuRegister
 /// An enum storing each of the lettered registers in a Game Boy CPU.
@@ -12,6 +20,15 @@ pub enum CpuRegister {
     E = 5,
     H = 6,
     L = 7
+}
+
+impl From<u8> for CpuRegister {
+    fn from(value: u8) -> Self {
+        // this is safe because it restricts the integer into only valid values
+        // for the register
+        let value = value & 0x7;
+        unsafe { transmute(value) }
+    }
 }
 
 /// #FlagRegister
