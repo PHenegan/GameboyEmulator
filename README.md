@@ -44,10 +44,9 @@ everything.**
   because I haven't added save support*
   - Implementations exist for unmapped cartridges, MBC1, MBC2, and MBC3 cartridges. 
     At some point I may try to implement the others but they are lower priority since I want to
-    target basic functionality first.
-  - The constructors currently implemented are filler and will likely be removed or made private.
-    This is because I wanted to wait until I have the logic for several controllers implemented
-    before making the logic that actually loads ROM and RAM data into them.
+    target basic functionality first. The cartridges can be initialized individually, or using
+    a builder function that reads the cartridge header inside the ROM to determine the cartridge
+    type.
 - I have some idea from watching a technical video, but I'm unclear on where the PPU fits into
   the program's structure. I'll likely do more research into that as well
 
