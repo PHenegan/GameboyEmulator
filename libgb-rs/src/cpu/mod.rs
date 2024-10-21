@@ -1,6 +1,7 @@
 use std::mem::transmute;
 
 pub mod decode;
+pub mod execute;
 pub mod instructions;
 
 use crate::utils::{Merge, Split};

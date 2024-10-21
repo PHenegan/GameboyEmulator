@@ -72,6 +72,16 @@ impl GameBoySystem {
         }
     }
 
+    fn set_r16(&mut self, register: u8, value: u16) {
+        match register {
+            0 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            1 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            2 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            3 => self.registers.sp = value,
+            _ => panic!("Invalid r16 address - value {register} greater than 4 passed to set_r16")
+        }
+    }
+
     fn get_r16_mem(&mut self, register: u8) -> u16 {
         match register {
             0 => self.registers.get_joined_registers(CpuRegister::B, CpuRegister::C),
