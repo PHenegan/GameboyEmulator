@@ -1,10 +1,9 @@
 pub mod cpu;
 pub mod memory;
+mod utils;
 
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
-
-mod utils;
 
 #[derive(Debug)]
 pub enum GameBoySystemError {
