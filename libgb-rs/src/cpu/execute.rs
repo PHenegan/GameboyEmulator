@@ -10,7 +10,7 @@ impl GameBoySystem {
         match instruction.op {
             Operation::NOP => Ok(()), 
             Operation::Load8(reg, val) => self.set_r8(reg, val),
-            Operation::Load16(reg, val) => self.set_r16(reg, val),
+            Operation::Load16(reg, val) => Ok(self.set_r16(reg, val)),
             Operation::Store8(addr, val) => self.store8(addr, val),
             Operation::Store16(addr, val) => self.store16(addr, val),
             Operation::Add8(val, carry) => Ok(self.add8(val, carry)),
@@ -21,9 +21,9 @@ impl GameBoySystem {
             Operation::Xor8(val) => Ok(self.xor8(val)),
             Operation::Compare8(val) => Ok(self.compare8(val)),
             Operation::Increment8(reg) => self.inc8(reg),
-            Operation::Increment16(reg) => self.inc16(reg),
+            Operation::Increment16(reg) => Ok(self.inc16(reg)),
             Operation::Decrement8(reg) => self.dec8(reg),
-            Operation::Decrement16(reg) => self.dec16(reg),
+            Operation::Decrement16(reg) => Ok(self.dec16(reg)),
             _ => todo!()
         }
     }
