@@ -24,6 +24,11 @@ impl GameBoySystem {
             Operation::Increment16(reg) => Ok(self.inc16(reg)),
             Operation::Decrement8(reg) => self.dec8(reg),
             Operation::Decrement16(reg) => Ok(self.dec16(reg)),
+            Operation::RotateLeft(reg, carry) => self.shift_left(reg, true, carry),
+            Operation::RotateRight(reg, carry) => self.shift_right(reg, true, carry, false),
+            Operation::ShiftLeftArithmetic(reg) => self.shift_left(reg, false, false),
+            Operation::ShiftRightArithmetic(reg) => self.shift_right(reg, false, false, true),
+            Operation::ShiftRightLogical(reg) => self.shift_right(reg, false, false, false),
             _ => todo!()
         }
     }
@@ -205,7 +210,7 @@ impl GameBoySystem {
             ..flags_current
         };
         
-        self.set_r8(register, result);
+        self.set_r8(register, result)?;
         self.registers.set_register(CpuRegister::F, flags_result.into());
         Ok(())
     }
@@ -217,7 +222,9 @@ impl GameBoySystem {
         self.set_r16(register, result);
     }
 
-    fn rotate_left(&mut self, register: u8, use_carry: bool) -> Result<(), GameBoySystemError> {
+    fn shift_left(
+        &mut self, register: u8, rotate: bool, use_carry: bool
+    ) -> Result<(), GameBoySystemError> {
         let flags_current: FlagRegister = self.registers.get_register(CpuRegister::F).into();
         let carry_current = flags_current.carry;
         let current = self.get_r8(register)?;
@@ -225,10 +232,10 @@ impl GameBoySystem {
         let carry_result = (current & 0x80) != 0;
         let mut result = current << 1;
 
-        if use_carry {
+        if use_carry && rotate {
             result |= carry_current as u8;
         }
-        else {
+        else if rotate {
             result |= carry_result as u8;
         }
 
@@ -244,19 +251,24 @@ impl GameBoySystem {
         Ok(())
     }
 
-    fn rotate_right(&mut self, register: u8, use_carry: bool) -> Result<(), GameBoySystemError> {
+    fn shift_right(
+        &mut self, register: u8, rotate: bool, use_carry: bool, arithmetic: bool
+    ) -> Result<(), GameBoySystemError> {
         let flags_current: FlagRegister = self.registers.get_register(CpuRegister::F).into();
         let carry_current = flags_current.carry;
         let current = self.get_r8(register)?;
 
         let carry_result = (current & 0x80) != 0;
-        let mut result = current << 1;
+        let mut result = current >> 1;
 
-        if use_carry {
-            result |= carry_current as u8;
+        if use_carry && rotate {
+            result |= (carry_current as u8) << 7;
         }
-        else {
-            result |= carry_result as u8;
+        else if rotate {
+            result |= (carry_result as u8) << 7;
+        }
+        else if arithmetic {
+            result |= current & 0x80;
         }
 
         let flags_result = FlagRegister {
