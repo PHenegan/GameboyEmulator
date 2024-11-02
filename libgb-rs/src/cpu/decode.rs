@@ -153,10 +153,10 @@ impl GameBoySystem {
             cycles: 1,
             op: match instruction {
                 // TODO - I smell a pattern here
-                0x07 => Operation::RotateLeft(0, true),
-                0x0F => Operation::RotateRight(0, true),
-                0x17 => Operation::RotateLeft(0, false),
-                0x1F => Operation::RotateRight(0, false),
+                0x07 => Operation::RotateLeft(0, true, false),
+                0x0F => Operation::RotateRight(0, true, false),
+                0x17 => Operation::RotateLeft(0, false, false),
+                0x1F => Operation::RotateRight(0, false, false),
                 0x27 => Operation::DAA,
                 0x2F => Operation::Complement,
                 0x37 => Operation::SetCarryFlag,
@@ -289,20 +289,22 @@ impl GameBoySystem {
             }),
             0xF8 => {
                 let imm8 = self.fetch_byte()? as i8;
-                let new_val = self.registers.sp.overflowing_add(imm8 as u16).0;
+                let new_val = self.registers.sp.wrapping_add(imm8 as u16);
                 Ok(Instruction { 
+                    // Load LH with SP
                     op: Operation::Load16(2, new_val),
                     cycles: 3
                 })
             },
             0xF9 => Ok(Instruction { 
-                op: Operation::SetStackPointer(
+                op: Operation::Load16(
+                    3, // Register SP
                     self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
                 ),
                 cycles: 2
             }),
-            0xF3 => Ok(Instruction { op: Operation::DisableInterrupts, cycles: 1 }),
-            0xFB => Ok(Instruction { op: Operation::EnableInterrupts, cycles: 1 }),
+            0xF3 => Ok(Instruction { op: Operation::SetInterrupts(false), cycles: 1 }),
+            0xFB => Ok(Instruction { op: Operation::SetInterrupts(true), cycles: 1 }),
             _ => Err(GameBoySystemError::InvalidInstructionError(instruction))
         }
     }
@@ -384,10 +386,10 @@ impl GameBoySystem {
     fn load_prefixed_alu(&mut self, fn3: u8, register: u8) -> Operation {
         assert!(register < 8, "invalid register should never be provided");
         match fn3 {
-            0 => Operation::RotateLeft(register, true),
-            1 => Operation::RotateRight(register, true),
-            2 => Operation::RotateLeft(register, false),
-            3 => Operation::RotateRight(register, false),
+            0 => Operation::RotateLeft(register, true, true),
+            1 => Operation::RotateRight(register, true, true),
+            2 => Operation::RotateLeft(register, false, true),
+            3 => Operation::RotateRight(register, false, true),
             4 => Operation::ShiftLeftArithmetic(register),
             5 => Operation::ShiftRightArithmetic(register),
             6 => Operation::SwapBits(register),
