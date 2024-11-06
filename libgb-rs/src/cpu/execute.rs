@@ -24,7 +24,6 @@ impl GameBoySystem {
             Operation::Increment16(reg) => Ok(self.inc16(reg)),
             Operation::Decrement8(reg) => self.dec8(reg),
             Operation::Decrement16(reg) => Ok(self.dec16(reg)),
-            // carry args: register, whether to rotate, carry, (right only - arithmetic op flag)
             Operation::RotateLeft(reg, carry, zero) => self.rotate_left(reg, carry, zero),
             Operation::RotateRight(reg, carry, zero) => self.rotate_right(reg, carry, zero),
             Operation::ShiftLeftArithmetic(reg) => self.shift_left(reg),
@@ -45,8 +44,8 @@ impl GameBoySystem {
             Operation::PushStack(reg) => self.push_stack(reg),
             Operation::AddStackPointer(val) => Ok(self.add_stack_pointer(val)),
             Operation::SetInterrupts(enabled) => Ok(self.set_interrupts(enabled)),
-            Operation::Stop => todo!(),
-            Operation::Halt => todo!(),
+            Operation::Stop => Ok(self.stopped = true),
+            Operation::Halt => Ok(self.halted = true),
         }
     }
 
@@ -475,4 +474,9 @@ impl GameBoySystem {
     fn set_interrupts(&mut self, enable_interrupts: bool) {
         self.internal_interrupts = enable_interrupts;
     }
+}
+
+#[cfg(test)]
+mod tests {
+    
 }
