@@ -5,7 +5,7 @@ mod utils;
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GameBoySystemError {
     MemoryReadError(u16), // the address at which a read was attempted
     MemoryWriteError(u16, u16), // The address at which a write was attempted, and the write value

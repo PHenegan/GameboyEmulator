@@ -42,6 +42,7 @@ pub enum Operation {
     Halt,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Instruction {
     pub cycles: u8,
     pub op: Operation
