@@ -162,7 +162,7 @@ impl GameBoySystem {
                 0x0F => Operation::RotateRight(0, true, false),
                 0x17 => Operation::RotateLeft(0, false, false),
                 0x1F => Operation::RotateRight(0, false, false),
-                0x27 => Operation::DAA,
+                0x27 => Operation::DecimalAdjustAccumulator,
                 0x2F => Operation::Complement,
                 0x37 => Operation::SetCarryFlag,
                 0x3F => Operation::ComplementCarryFlag,
