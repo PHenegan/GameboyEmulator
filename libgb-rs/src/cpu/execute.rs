@@ -30,7 +30,7 @@ impl GameBoySystem {
             Operation::ShiftRightArithmetic(reg) => self.shift_right(reg, true),
             Operation::ShiftRightLogical(reg) => self.shift_right(reg, false),
             Operation::SwapBits(reg) => self.swap_bits(reg),
-            Operation::DAA => self.daa(),
+            Operation::DecimalAdjustAccumulator => self.daa(),
             Operation::Complement => Ok(self.complement()),
             Operation::SetCarryFlag => Ok(self.set_carry()),
             Operation::ComplementCarryFlag => Ok(self.complement_carry()),
@@ -306,7 +306,7 @@ impl GameBoySystem {
         let current = self.get_r8(register)?;
 
         let carry_result = (current & 0x01) != 0;
-        // see rotate_left for explanation of this
+        // s    ee rotate_left for explanation of this
         let new_bit =
             (use_carry_result && flags_current.carry) || (!use_carry_result && carry_result);
         let result = (current >> 1) | ((new_bit as u8) << 7);
@@ -337,7 +337,40 @@ impl GameBoySystem {
     }
 
     fn daa(&mut self) -> Result<(), GameBoySystemError> {
-        todo!()
+        let flags_current: FlagRegister = self.registers.get_register(CpuRegister::F).into();
+        let current = self.registers.get_register(CpuRegister::A);
+        let mut result = current;
+        let mut carry = false;
+
+        // I feel like this could be optimized to not need branching but idrk
+        if flags_current.subtract {
+            if flags_current.half_carry {
+                result = result.wrapping_sub(0x06);
+            }
+            if flags_current.carry {
+                (result, carry) = result.overflowing_sub(0x60);
+            }
+        }
+        else {
+            if flags_current.half_carry || (result & 0xF) > 9 {
+                result = result.wrapping_add(0x06);
+            }
+
+            if flags_current.carry || (result > 0x99) {
+                (result, carry) = result.overflowing_add(0x60);
+            }
+        }
+
+        let flags_result = FlagRegister {
+            zero: result == 0,
+            half_carry: false,
+            carry,
+            ..flags_current
+        };
+
+        self.registers.set_register(CpuRegister::F, flags_result.into());
+        self.registers.set_register(CpuRegister::A, result);
+        Ok(())
     }
 
     fn complement(&mut self) {
@@ -476,7 +509,3 @@ impl GameBoySystem {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    
-}
