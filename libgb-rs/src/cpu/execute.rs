@@ -77,7 +77,6 @@ impl GameBoySystem {
             carry |= carry_result.1;
         }
 
-        // TODO - set carry flags here
         let flags = FlagRegister {
             zero: result == 0,
             subtract: false,
