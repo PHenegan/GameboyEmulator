@@ -18,13 +18,13 @@ pub enum Operation {
     Increment16(u8), // register to increment 
     Decrement8(u8), // register to decrement
     Decrement16(u8), // register to decrement
-    RotateLeft(u8, bool), // Rotate register left 1 bit. Bool is whether to use carry bit in op
-    RotateRight(u8, bool), // Rotate register right 1 bit. Bool is whether to use carry bit in op
+    RotateLeft(u8, bool, bool), // Rotate register left 1 bit. Bool is whether to use carry bit in op, and whether to set zero flag
+    RotateRight(u8, bool, bool), // Rotate register right 1 bit. Bool is whether to use carry bit in op, and whether to set zero flag
     ShiftLeftArithmetic(u8), // Shift register left 1 bit
     ShiftRightArithmetic(u8), // Shift register right 1 bit, keeping most significant bit (MSB)
     ShiftRightLogical(u8), // Shift the register right 1 bit, using 0 as the new MSB
     SwapBits(u8), // Swap the upper and lower 4 bits of the given register
-    DAA, // ???
+    DecimalAdjustAccumulator, // ???
     Complement, // A = !A
     SetCarryFlag, // Set c = 1
     ComplementCarryFlag, // Set c = !c
@@ -37,13 +37,12 @@ pub enum Operation {
     PopStack(u8), // Pop the last 2 bytes of the stack into the given 16-bit register
     PushStack(u8), // Push the value in the given 16-bit register onto the stack
     AddStackPointer(i8), // Add the given signed integer to the register in the stack
-    SetStackPointer(u16), // Set the stack pointer to a specific value
-    EnableInterrupts,
-    DisableInterrupts,
+    SetInterrupts(bool),
     Stop,
     Halt,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Instruction {
     pub cycles: u8,
     pub op: Operation

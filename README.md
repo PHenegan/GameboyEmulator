@@ -37,9 +37,9 @@ emulation as well.
 this list is really just a way for me to itemize the order in which I want to try to do 
 everything.**
 - See the GitHub Issues page for more specific details on progress
-- 
-- There is a basic skeleton for the CPU registers, as well as the functions needed for memory
-  access by the CPU. See the memory/mod.rs file.
+- There is a struct holding the Game Boy system internals. It can currently decode and execute
+  CPU instructions from memory. However, there is currently no logic for updating a display buffer,
+  nor is there logic for interrupts, sound, etc.
 - There is a trait for handling reads/writes to cartridge memory. *It is not necessarily finalized
   because I haven't added save support*
   - Implementations exist for unmapped cartridges, MBC1, MBC2, and MBC3 cartridges. 
@@ -78,7 +78,7 @@ the Game Boy system as a whole. I also included some typed notes I took on this 
 for the purpose of internalizing the system better. They can be found in the `extra/` folder in this
 repository.
 
-[https://gbdev.io/gb-opcodes//optables/](https://gbdev.io/gb-opcodes//optables/) is a great website
+[https://gbdev.io/gb-opcodes/optables/](https://gbdev.io/gb-opcodes//optables/) is a great website
 which has some documentation on the Gameboy's opcodes
 
 [The Pan Docs](https://gbdev.io/pandocs/) Another great resource for technical documentation 

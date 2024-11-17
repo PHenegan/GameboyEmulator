@@ -5,7 +5,7 @@ mod utils;
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GameBoySystemError {
     MemoryReadError(u16), // the address at which a read was attempted
     MemoryWriteError(u16, u16), // The address at which a write was attempted, and the write value
@@ -15,6 +15,9 @@ pub enum GameBoySystemError {
 pub struct GameBoySystem {
     registers: CpuData,
     memory: Box<dyn MemoryController>,
+    internal_interrupts: bool,
+    halted: bool,
+    stopped: bool, // this is Different than halt and is used by CGB to go into half clockspeed mode
     // PPU will also need to go here eventually
 }
 
@@ -22,7 +25,10 @@ impl GameBoySystem {
     pub fn new(memory: Box<dyn MemoryController>) -> Self {
         Self {
             registers: CpuData::new(),
-            memory
+            memory,
+            internal_interrupts: false,
+            halted: false,
+            stopped: false
         }
     }
 
@@ -72,6 +78,16 @@ impl GameBoySystem {
         }
     }
 
+    fn set_r16(&mut self, register: u8, value: u16) {
+        match register {
+            0 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            1 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            2 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            3 => self.registers.sp = value,
+            _ => panic!("Invalid r16 address - value {register} greater than 4 passed to set_r16")
+        }
+    }
+
     fn get_r16_mem(&mut self, register: u8) -> u16 {
         match register {
             0 => self.registers.get_joined_registers(CpuRegister::B, CpuRegister::C),
@@ -91,6 +107,26 @@ impl GameBoySystem {
                 value
             },
             _ => panic!("Invalid r16mem address - value greater than 4 passed in")
+        }
+    }
+
+    fn get_r16_stk(&mut self, register: u8) -> u16 {
+        match register {
+            0 => self.registers.get_joined_registers(CpuRegister::B, CpuRegister::C),
+            1 => self.registers.get_joined_registers(CpuRegister::D, CpuRegister::E),
+            2 => self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L),
+            3 => self.registers.get_joined_registers(CpuRegister::A, CpuRegister::F),
+            _ => panic!("Invalid r16 address - value {register} greater than 4 passed to get_r16")
+        }
+    }
+
+    fn set_r16_stk(&mut self, register: u8, value: u16) {
+        match register {
+            0 => self.registers.set_joined_registers(CpuRegister::B, CpuRegister::C, value),
+            1 => self.registers.set_joined_registers(CpuRegister::D, CpuRegister::E, value),
+            2 => self.registers.set_joined_registers(CpuRegister::H, CpuRegister::L, value),
+            3 => self.registers.set_joined_registers(CpuRegister::A, CpuRegister::F, value),
+            _ => panic!("Invalid r16 address - value {register} greater than 4 passed to get_r16")
         }
     }
 }

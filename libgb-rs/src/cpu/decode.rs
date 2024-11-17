@@ -5,6 +5,10 @@ use super::{CpuRegister, FlagRegister};
 
 const REG_A: u8 = 0;
 const REG_MEM_READ: u8 = 6;
+// Instructions that should cause the GameBoy CPU to panic
+const INVALID_INSTRUCTIONS: [u8; 11] = [
+    0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD
+];
 
 impl GameBoySystem {
     // -- DEV DESIGN NOTE --
@@ -48,7 +52,7 @@ impl GameBoySystem {
     }
 
     fn load_block_0(&mut self, instruction: u8) -> Result<Instruction, GameBoySystemError> {
-        assert!(instruction & 0xC0 == 0, "Should only call when first 2 bits are 0");
+        debug_assert!(instruction & 0xC0 == 0, "Should only call when first 2 bits are 0");
         let fn3 = instruction & 0x07;
         if fn3 == 0 && (instruction & 0xF0) != 0 {
             return self.load_jump_relative(instruction);
@@ -59,7 +63,8 @@ impl GameBoySystem {
             return Ok(self.load_block_0_alu(instruction));
         }
 
-        let reg = (instruction >> 4) & 0x03;
+        let reg = (instruction >> 3) & 0x07;
+        println!("instruction: {instruction:#X}, register: {reg}, fn3: {fn3}");
         let mut cycles = 1;
         if reg == REG_MEM_READ {
             // doing anything on [HL] takes more cycles
@@ -153,11 +158,11 @@ impl GameBoySystem {
             cycles: 1,
             op: match instruction {
                 // TODO - I smell a pattern here
-                0x07 => Operation::RotateLeft(0, true),
-                0x0F => Operation::RotateRight(0, true),
-                0x17 => Operation::RotateLeft(0, false),
-                0x1F => Operation::RotateRight(0, false),
-                0x27 => Operation::DAA,
+                0x07 => Operation::RotateLeft(0, true, false),
+                0x0F => Operation::RotateRight(0, true, false),
+                0x17 => Operation::RotateLeft(0, false, false),
+                0x1F => Operation::RotateRight(0, false, false),
+                0x27 => Operation::DecimalAdjustAccumulator,
                 0x2F => Operation::Complement,
                 0x37 => Operation::SetCarryFlag,
                 0x3F => Operation::ComplementCarryFlag,
@@ -167,7 +172,7 @@ impl GameBoySystem {
     }
 
     fn load_block_1(&mut self, instruction: u8) -> Result<Instruction, GameBoySystemError> {
-        assert!(instruction & 0xC0 == 0x40, "Should not be able to call when block is not 1");
+        debug_assert!(instruction & 0xC0 == 0x40, "Should not be able to call when block is not 1");
 
         let src_reg = instruction & 7;
         let dest_reg = (instruction >> 3) & 7;
@@ -175,15 +180,18 @@ impl GameBoySystem {
         // If both registers are [HL] then it should be a halt
         if src_reg == dest_reg && src_reg == REG_MEM_READ {
             return Ok(Instruction { op: Operation::Halt, cycles: 1 });
-        } 
+        }
+        // moving to or from memory takes an extra cycle
+        let cycles = if src_reg == REG_MEM_READ || dest_reg == REG_MEM_READ { 2 } else { 1 };
+
         Ok(Instruction {
             op: Operation::Load8(dest_reg, self.get_r8(src_reg)?),
-            cycles: 2
+            cycles
         })
     }
 
     fn load_block_2(&self, instruction: u8) -> Result<Instruction, GameBoySystemError> {
-        assert!(instruction & 0xC0 == 0x80, "Should not be able to call when block is not 2");
+        debug_assert!(instruction & 0xC0 == 0x80, "Should not be able to call when block is not 2");
         // 8-bit logic arithmetic
         let register = instruction & 7;
         let value = self.get_r8(register)?;
@@ -207,17 +215,20 @@ impl GameBoySystem {
     }
 
     fn load_block_3(&mut self, instruction: u8) -> Result<Instruction, GameBoySystemError> {
-        assert!(instruction & 0xC0 == 0xC0, "Should not be able to call when block is not 3");
+        debug_assert!(instruction & 0xC0 == 0xC0, "Should not be able to call when block is not 3");
+        if INVALID_INSTRUCTIONS.contains(&instruction) {
+            return Err(GameBoySystemError::InvalidInstructionError(instruction))
+        }
 
         let fn3 = instruction & 7;
-        let tgt = instruction & 0x38;
+        let target = instruction & 0x38;
 
         if instruction == 0xCB {
             return self.load_prefixed();
         } else if fn3 == 6 {
             return self.load_block_3_alu(instruction);
-        } else if fn3 == 7 && (instruction & 0x2) != 0 {
-            return Ok(Instruction { op: Operation::Call(tgt as u16), cycles: 4});
+        } else if fn3 == 7 {
+            return Ok(Instruction { op: Operation::Call(target as u16), cycles: 4});
         }
 
         let fn4 = instruction & 0xF;
@@ -225,10 +236,10 @@ impl GameBoySystem {
             return Ok(self.load_block_3_stack(instruction));
         }
 
-        if instruction & 1 == 0 {
+        if instruction & 1 == 0 && instruction & 0x20 == 0 {
             return self.load_block_3_cond(instruction)
         }
-
+        
         // I kind of hate this but it's fine :upside_down:
         match instruction {
             0xC9 => Ok(Instruction { op: Operation::Return(false), cycles: 4 }),
@@ -237,7 +248,7 @@ impl GameBoySystem {
             0xE9 => Ok(
                 Instruction { 
                     op: Operation::Jump(
-                            self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
+                        self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
                     ),
                     cycles: 1
                 }
@@ -276,7 +287,7 @@ impl GameBoySystem {
                 let addr = 0xFF00 + (byte as u16);
                 let mem_value = self.memory.load_byte(addr)
                     .ok_or(GameBoySystemError::MemoryReadError(addr))?;
-                Ok(Instruction { op: Operation::Load8(REG_A, mem_value), cycles: 3 })
+                Ok(Instruction { op: Operation::Load8(REG_A, mem_value), cycles: 2 })
             }
             0xFA => {
                 let addr = self.fetch_imm16()?;
@@ -289,20 +300,22 @@ impl GameBoySystem {
             }),
             0xF8 => {
                 let imm8 = self.fetch_byte()? as i8;
-                let new_val = self.registers.sp.overflowing_add(imm8 as u16).0;
+                let new_val = self.registers.sp.wrapping_add(imm8 as u16);
                 Ok(Instruction { 
+                    // Load LH with SP
                     op: Operation::Load16(2, new_val),
                     cycles: 3
                 })
             },
             0xF9 => Ok(Instruction { 
-                op: Operation::SetStackPointer(
+                op: Operation::Load16(
+                    3, // Register SP
                     self.registers.get_joined_registers(CpuRegister::H, CpuRegister::L)
                 ),
                 cycles: 2
             }),
-            0xF3 => Ok(Instruction { op: Operation::DisableInterrupts, cycles: 1 }),
-            0xFB => Ok(Instruction { op: Operation::EnableInterrupts, cycles: 1 }),
+            0xF3 => Ok(Instruction { op: Operation::SetInterrupts(false), cycles: 1 }),
+            0xFB => Ok(Instruction { op: Operation::SetInterrupts(true), cycles: 1 }),
             _ => Err(GameBoySystemError::InvalidInstructionError(instruction))
         }
     }
@@ -331,7 +344,7 @@ impl GameBoySystem {
         let r16stk = (instruction >> 4) & 3;
         match instruction & 0xF {
             1 => Instruction { op: Operation::PopStack(r16stk), cycles: 3 },
-            5 => Instruction { op: Operation::PushStack(r16stk), cycles: 3 },
+            5 => Instruction { op: Operation::PushStack(r16stk), cycles: 4 },
             _ => panic!("Invalid instruction {instruction:#X} passed to load stack")
         }
     }
@@ -382,12 +395,12 @@ impl GameBoySystem {
     }
 
     fn load_prefixed_alu(&mut self, fn3: u8, register: u8) -> Operation {
-        assert!(register < 8, "invalid register should never be provided");
+        debug_assert!(register < 8, "invalid register should never be provided");
         match fn3 {
-            0 => Operation::RotateLeft(register, true),
-            1 => Operation::RotateRight(register, true),
-            2 => Operation::RotateLeft(register, false),
-            3 => Operation::RotateRight(register, false),
+            0 => Operation::RotateLeft(register, true, true),
+            1 => Operation::RotateRight(register, true, true),
+            2 => Operation::RotateLeft(register, false, true),
+            3 => Operation::RotateRight(register, false, true),
             4 => Operation::ShiftLeftArithmetic(register),
             5 => Operation::ShiftRightArithmetic(register),
             6 => Operation::SwapBits(register),
@@ -399,27 +412,40 @@ impl GameBoySystem {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::fs::File;
+    use std::io::Read;
+    use mockall::predicate;
     use rand::random;
+    use serde::Deserialize;
 
-    use crate::GameBoySystem;
+    use crate::{GameBoySystem, GameBoySystemError};
     use crate::memory::MockMemoryController;
+    use super::INVALID_INSTRUCTIONS;
+
+    #[derive(Deserialize, Debug)]
+    struct OpcodeList {
+        unprefixed: HashMap<String, Opcode>,
+        cbprefixed: HashMap<String, Opcode>
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct Opcode {
+        cycles: Vec<u8>,
+        bytes: u8
+    }
 
     #[test]
     fn fuzz_test_instructions() {
         let mut mem = MockMemoryController::new();
-        mem.expect_load_half_word()
-            .return_const(0xFFFF);
         mem.expect_load_byte()
             .returning(|_| {
-                // According to Pan Docs, these should be the only invalid instructions
-                let invalid_instructions: Vec<u8> = vec![
-                    0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD
-                ];
-
                 let mut rand: u8 = random();
-                while invalid_instructions.contains(&rand) { rand = random(); }
+                while INVALID_INSTRUCTIONS.contains(&rand) { rand = random(); }
                 Some(rand)
             });
+        mem.expect_load_half_word()
+            .return_const(0xFF);
 
         let mut dmg: GameBoySystem = GameBoySystem::new(Box::new(mem));
         
@@ -430,6 +456,102 @@ mod tests {
             assert!(result.is_ok(), "Should not crash for any instruction");
             assert!(prefix_result.is_ok(), "Should not crash for any prefixed instruction");
         }
+    }
+
+    #[test]
+    fn test_json_unprefixed() {
+        let mut file = File::open("./testdata/expected-opcodes.json")
+            .expect("Failed while opening JSON file");
+        let mut file_string = String::new();
+        file.read_to_string(&mut file_string).expect("Failed while reading JSON into string");
+        let json_object: OpcodeList = serde_json::from_str(&file_string)
+            .expect("Failed while deserializing JSON string");
+
+        for (key, instruction) in json_object.unprefixed {
+            // Convert the key (e.g. "0x15") into a u8 value to test with
+            let key_num = u8::from_str_radix(key.as_str().trim_start_matches("0x"), 16)
+                .expect("JSON key should be a valid byte");
+
+            test_instruction(key_num, instruction)
+        }
+    }
+
+    #[test]
+    fn test_json_prefixed() {
+        let mut file = File::open("./testdata/expected-opcodes.json")
+            .expect("Failed while opening JSON file");
+        let mut file_string = String::new();
+        file.read_to_string(&mut file_string).expect("Failed while reading JSON into string");
+        let json_object: OpcodeList = serde_json::from_str(&file_string)
+            .expect("Failed while deserializing JSON string");
+        
+        for (key, instruction) in json_object.cbprefixed {
+            // Convert the key (e.g. "0x15") into a u8 value to test with
+            let key_num = u8::from_str_radix(key.as_str().trim_start_matches("0x"), 16)
+                .expect("JSON key should be a valid byte");
+
+            test_prefix_instruction(key_num, instruction)
+        }
+    }
+
+    fn test_instruction(instruction: u8, opcode: Opcode) {
+        if instruction == 0xCB {
+            return;
+        }
+
+        let mut mem = MockMemoryController::new();
+        mem.expect_load_byte()
+            .with(predicate::eq(0))
+            .times(1)
+            .return_const(instruction);
+        mem.expect_load_byte()
+            .times(0..=(opcode.bytes as usize))
+            .return_const(0xFF);
+        mem.expect_load_half_word()
+            .times(0..=1)
+            .return_const(0xFFFF);
+        let mut gb = GameBoySystem::new(Box::new(mem));
+
+        let result = gb.load_instruction();
+        if INVALID_INSTRUCTIONS.contains(&instruction) {
+            assert_eq!(
+                result, Err(GameBoySystemError::InvalidInstructionError(instruction)), 
+                "Invalid instruction {instruction:#X} should result in an error"
+            );
+            return;
+        }
+
+        let result = result.expect("Valid Instruction should not result in an error");
+
+        assert!(
+            opcode.cycles.contains(&(result.cycles * 4)),
+            "Instruction {instruction:#X} ({result:#?}) has incorrect amount of cycles"
+        );
+    }
+
+    fn test_prefix_instruction(instruction: u8, opcode: Opcode) {
+        let mut mem = MockMemoryController::new();
+        mem.expect_load_byte()
+            .with(predicate::eq(0))
+            .times(1)
+            .return_const(0xCB);
+        mem.expect_load_byte()
+            .with(predicate::eq(1))
+            .times(1)
+            .return_const(instruction);
+        mem.expect_load_byte()
+            .times(0..=1)
+            .return_const(0xFF);
+        let mut gb = GameBoySystem::new(Box::new(mem));
+
+        let result = gb.load_instruction();
+        assert!(result.is_ok(), "Should not error for prefixed instruction {instruction:#X}");
+        let result = result.unwrap();
+
+        assert_eq!(
+            result.cycles, opcode.cycles[0] / 4,
+            "Should have correct cycle time for instruction {instruction:#X}"
+        );
     }
 }
 
