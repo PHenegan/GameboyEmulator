@@ -32,6 +32,15 @@ impl GameBoySystem {
         }
     }
 
+    pub fn cycle(&mut self) -> Result<(), GameBoySystemError> {
+        if self.halted {
+            return Ok(());
+        }
+
+        let instruction = self.load_instruction()?;
+        self.exec_instruction(&instruction)
+    }
+
     fn fetch_byte(&mut self) -> Result<u8, GameBoySystemError> {
         let byte = self.memory.load_byte(self.registers.pc)
             .ok_or(GameBoySystemError::MemoryReadError(self.registers.pc))?;
