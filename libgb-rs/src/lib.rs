@@ -1,6 +1,9 @@
 pub mod cpu;
+pub mod ppu;
 pub mod memory;
 mod utils;
+
+use std::{error::Error, fmt::Display};
 
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
@@ -11,6 +14,14 @@ pub enum GameBoySystemError {
     MemoryWriteError(u16, u16), // The address at which a write was attempted, and the write value
     InvalidInstructionError(u8) // The invalid binary instruction
 }
+
+impl Display for GameBoySystemError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "libgb-rs Gameboy System Error: {:#?}", *self)
+    }
+}
+
+impl Error for GameBoySystemError {}
 
 pub struct GameBoySystem {
     registers: CpuData,
