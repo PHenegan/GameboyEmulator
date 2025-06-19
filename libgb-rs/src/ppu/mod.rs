@@ -1,3 +1,5 @@
+use crate::{constants::display::{TILE_BLOCK_0, TILE_BLOCK_1, TILE_BLOCK_2}, GameBoySystem};
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct PpuError;
 
@@ -15,23 +17,6 @@ pub struct PpuError;
 //   of persistant state between function calls to get this to work properly
 // - OAM ram should not be accessed during specific states - "OAM search" and "Pixel Transfer"
 //   periods (~48 minutes into the ultimate game boy talk video)
-
-
-/// # Tile
-/// Represents a Tile (8x8 square of pixels) to be displayed on a Game Boy screen
-///
-/// ## Fields:
-/// - `rows`: the block of 8 pixel rows in each tile. Each row is 8 pixels wide.
-///           the leftmost byte of each row contains the second bit in each pixel's color,
-///           while the first byte contains the first bit. This is because of the little-endian
-///           byte ordering.
-pub struct Tile {
-    x: u8, // these might be unnecessary but I'm putting them here for now
-    y: u8,
-    tile_num: u8,
-    // (Figure out how to make this in a way that doesn't get messed up with Gameboy Color
-    // support)
-}
 
 /// # Sprite
 /// Represents a sprite ("Object" by Nintendo's terms) which is drawn at an arbitrary position on
@@ -71,3 +56,66 @@ pub struct Window {
     address: u16,
 }
 
+pub struct DmgPpu {
+    window_x: u8,
+    window_y: u8,
+    scroll_x: u8,
+    scroll_y: u8,
+    signed_tile_index: bool,
+    object_map: Vec<Tile>,
+}
+
+/// # Tile
+/// represents a single 8x8 block of pixels on the Game Boy's screen
+type Tile = [u8; 16];
+
+impl GameBoySystem {
+
+    /// # ppu_draw
+    /// A single step in the Game Boy's PPU (Pixel Processing Unit) drawing pipeline
+    pub fn ppu_draw(&mut self) -> Result<(), PpuError> {
+        let sprite_data = self.sprite_map()?;
+        todo!()
+    }
+
+    /// # sprites
+    /// Create a list of sprites from the Game Boy's OAM memory
+    pub fn sprites(&self) -> Result<Vec<Sprite>, PpuError> {
+
+        todo!()
+    }
+
+    /// # sprite_map
+    /// load the list of tiles from the PPU's memory block
+    pub fn sprite_map(&self) -> Result<[Tile; 256], PpuError> {
+        self.tilemap(false)
+    }
+
+    pub fn tilemap(&self, signed_index: bool) -> Result<[Tile; 256], PpuError> {
+        let mut tiles = [[0; 16]; 256];
+        
+        // load the data by halves in order to avoid using signed logic for indices
+        let (first, second) = if signed_index {
+            (TILE_BLOCK_2, TILE_BLOCK_1)
+        } else {
+            (TILE_BLOCK_0, TILE_BLOCK_1)
+        };
+
+        self.load_tile_block(&mut tiles, first, 0)?;
+        self.load_tile_block(&mut tiles, second, 128)?;
+        Ok(tiles)
+    }
+
+    fn load_tile_block(
+        &self, tiles: &mut [Tile; 256], block_address: u16, idx: usize
+    ) -> Result<(), PpuError> {
+        for block_idx in 0..128 {
+            for tile_idx in 0..16 {
+                let address = block_address + (block_idx as u16) * 16 + (tile_idx as u16);
+                tiles[block_idx + idx][tile_idx] = self.memory.load_byte(address)
+                    .ok_or(PpuError)?;
+            }
+        }
+        Ok(())
+    }
+}

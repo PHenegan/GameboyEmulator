@@ -1,6 +1,7 @@
 pub mod cpu;
-pub mod ppu;
+pub mod constants;
 pub mod memory;
+pub mod ppu;
 mod utils;
 
 use std::{error::Error, fmt::Display};
