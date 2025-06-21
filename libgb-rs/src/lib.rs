@@ -4,10 +4,11 @@ pub mod memory;
 pub mod ppu;
 mod utils;
 
-use std::{error::Error, fmt::Display};
+use std::{array::from_fn, error::Error, fmt::Display};
 
 use cpu::{CpuData, CpuRegister};
 use memory::MemoryController;
+use ppu::Pixel;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GameBoySystemError {
@@ -29,8 +30,12 @@ pub struct GameBoySystem {
     memory: Box<dyn MemoryController>,
     internal_interrupts: bool,
     halted: bool,
-    stopped: bool, // this is Different than halt and is used by CGB to go into half clockspeed mode
-    // PPU will also need to go here eventually
+    stopped: bool, // this is different than halt and is used by CGB to go into half clockspeed mode
+    // TODO: make constants for the screen width and height
+    // PPU stuff may also need to go here eventually
+    lcd_output: [[Pixel; 160]; 144],
+    lcd_scanline: u8,
+    lcd_line_x: u8
 }
 
 impl GameBoySystem {
@@ -40,7 +45,10 @@ impl GameBoySystem {
             memory,
             internal_interrupts: false,
             halted: false,
-            stopped: false
+            stopped: false,
+            lcd_output: from_fn(|_idx| from_fn(|_idx| Pixel::default())),
+            lcd_scanline: 0,
+            lcd_line_x: 0,
         }
     }
 

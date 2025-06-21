@@ -6,6 +6,26 @@ use crate::constants::display;
 #[derive(Debug, PartialEq, Eq)]
 pub struct PpuError;
 
+pub struct Pixel {
+    /// Value between [0, 3]
+    pub color: u8,
+    /// Value between [0, 7]
+    pub palette: u8,
+    pub sprite_priority: bool,
+    pub lcd_priority: bool,
+}
+
+impl Default for Pixel {
+    fn default() -> Self {
+        Pixel {
+            color: 0,
+            palette: 0,
+            sprite_priority: false,
+            lcd_priority: false,
+        }
+    }
+}
+
 // Idea - just have the PPU logic be in the form of a "draw" function on the GameBoySystem struct
 // - construct the image by assembling Tiles, Sprites, and Windows
 // - Use a "render" function as a method on the image to produce a flat image to send
@@ -67,16 +87,6 @@ impl From<[u8; 4]> for Sprite {
     }
 }
 
-pub struct DmgPpu {
-    window_x: u8,
-    window_y: u8,
-    scroll_x: u8,
-    scroll_y: u8,
-    signed_tile_index: bool,
-    object_map: Vec<Tile>,
-    lcd_control: LcdFlags,
-}
-
 /// # LcdFlags
 /// A convenience struct to separate the LCD control register into its separate flags
 struct LcdFlags {
@@ -120,10 +130,6 @@ type Tile = [u8; display::TILE_SIZE];
 /// # Tile
 /// represents a mapping of a position on the screen to the index of a tile in the tile data. 
 type TileMap = [[u8; display::TILE_MAP_SIZE]; display::TILE_MAP_SIZE];
-
-pub trait GameBoyPpu {
-
-}
 
 impl GameBoySystem {
     /// # ppu_draw
@@ -204,7 +210,9 @@ impl GameBoySystem {
     /// ## Returns:
     /// The function returns an array of 256 "tiles," which themselves are 16 bytes of encoded
     /// palette data to create an 8x8 tile
-    pub fn tile_data(&self, signed_index: bool) -> Result<[Tile; 256], PpuError> {
+    pub fn tile_data(
+        &self, signed_index: bool
+    ) -> Result<[Tile; display::TILE_DATA_SIZE], PpuError> {
         let mut tiles = [[0; display::TILE_SIZE]; display::TILE_DATA_SIZE];
         
         // load the data by halves in order to avoid using signed logic for indices
